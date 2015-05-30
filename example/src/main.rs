@@ -9,7 +9,8 @@ fn main() {
     match parse_tar(tar) {
         IResult::Done(_, entries) => {
             for e in entries.iter() {
-                println!("{}", e.header.name)
+                println!("{}", e.header.name);
+                println!("{}", e.contents);
             }
         }
         e  => {
