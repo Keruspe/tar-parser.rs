@@ -32,6 +32,26 @@ pub struct TarEntry<'a> {
     pub contents: & 'a str
 }
 
+fn str_to_u32(s: &str, base: u32) -> u32 {
+    let mut u = 0;
+    let mut f = 1;
+
+    for c in s.chars().rev() {
+        u += f * ((c as u32) - ('0' as u32));
+        f *= base;
+    }
+
+    u
+}
+
+pub fn octal_to_u32(o: &str) -> u32 {
+    str_to_u32(o, 8)
+}
+
+pub fn decimal_to_u32(d: &str) -> u32 {
+    str_to_u32(d, 10)
+}
+
 fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     chain!(i,
         magic:    map_res!(take!(6),   from_utf8) ~
@@ -103,4 +123,33 @@ fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
 
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
     many0!(i, parse_entry)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn octal_to_u32_test() {
+        match octal_to_u32("756") {
+            494 => {},
+            o => panic!("octal_to_u32 failed, expected 494 but got {}", o)
+        }
+        match octal_to_u32("") {
+            0 => {},
+            o => panic!("octal_to_u32 failed, expected 0 but got {}", o)
+        }
+    }
+
+    #[test]
+    fn decimal_to_u32_test() {
+        match decimal_to_u32("756") {
+            756 => {},
+            d => panic!("decimal_to_u32 failed, expected 756 but got {}", d)
+        }
+        match decimal_to_u32("") {
+            0 => {},
+            d => panic!("decimal_to_u32 failed, expected 0 but got {}", d)
+        }
+    }
 }
