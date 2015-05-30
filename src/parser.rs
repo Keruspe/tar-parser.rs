@@ -32,6 +32,7 @@ pub struct TarEntry<'a> {
     pub contents: & 'a str
 }
 
+/* TODO: validation */
 fn str_to_u32(s: &str, base: u32) -> u32 {
     let mut u = 0;
     let mut f = 1;
