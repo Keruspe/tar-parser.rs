@@ -41,7 +41,7 @@ pub fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
         size:     map_res!(take!(12),  from_utf8) ~
         mtime:    map_res!(take!(12),  from_utf8) ~
         chksum:   map_res!(take!(8),   from_utf8) ~
-        /* TODO: typeflag */
+        typeflag: take!(1)                        ~
         linkname: map_res!(take!(100), from_utf8),
         /* TODO: ustar */
         ||{
@@ -53,7 +53,7 @@ pub fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
                 size:     size,
                 mtime:    mtime,
                 chksum:   chksum,
-                typeflag: '1',
+                typeflag: typeflag[0] as char,
                 linkname: linkname,
                 ustar:    None
             }
