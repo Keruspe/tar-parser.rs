@@ -1,0 +1,10 @@
+[package]
+name    = "tar-example"
+version = "0.0.1"
+authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
+
+[dependencies.tar]
+path = ".."
+
+[dependencies.nom]
+git = "https://github.com/Geal/nom"
