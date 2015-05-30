@@ -124,10 +124,6 @@ fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &str> {
     )
 }
 
-macro_rules! apply (
- ($i:expr, $fun:expr, $arg:expr ) => ( $fun( $i, $arg ) );
-);
-
 fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
     chain!(i,
         header:   parse_header ~
