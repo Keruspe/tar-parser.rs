@@ -146,26 +146,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn octal_to_u32_test() {
-        match octal_to_u32("756") {
+    fn octal_to_u64_test() {
+        match octal_to_u64("756") {
             494 => {},
-            o => panic!("octal_to_u32 failed, expected 494 but got {}", o)
+            o => panic!("octal_to_u64 failed, expected 494 but got {}", o)
         }
-        match octal_to_u32("") {
+        match octal_to_u64("") {
             0 => {},
-            o => panic!("octal_to_u32 failed, expected 0 but got {}", o)
+            o => panic!("octal_to_u64 failed, expected 0 but got {}", o)
         }
     }
 
     #[test]
-    fn decimal_to_u32_test() {
-        match decimal_to_u32("756") {
+    fn decimal_to_u64_test() {
+        match decimal_to_u64("756") {
             756 => {},
-            d => panic!("decimal_to_u32 failed, expected 756 but got {}", d)
+            d => panic!("decimal_to_u64 failed, expected 756 but got {}", d)
         }
-        match decimal_to_u32("") {
+        match decimal_to_u64("") {
             0 => {},
-            d => panic!("decimal_to_u32 failed, expected 0 but got {}", d)
+            d => panic!("decimal_to_u64 failed, expected 0 but got {}", d)
         }
     }
 }
