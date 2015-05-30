@@ -55,13 +55,13 @@ pub fn decimal_to_u64(d: &str) -> u64 {
 
 fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     chain!(i,
-        magic:    map_res!(take!(6),   from_utf8) ~
-        version:  map_res!(take!(2),   from_utf8) ~
-        uname:    map_res!(take!(32),  from_utf8) ~
-        gname:    map_res!(take!(32),  from_utf8) ~
-        devmajor: map_res!(take!(8),   from_utf8) ~
-        devminor: map_res!(take!(8),   from_utf8) ~
-        prefix:   map_res!(take!(155), from_utf8),
+        magic:    take_str!(6)  ~
+        version:  take_str!(2)  ~
+        uname:    take_str!(32) ~
+        gname:    take_str!(32) ~
+        devmajor: take_str!(8)  ~
+        devminor: take_str!(8)  ~
+        prefix:   take_str!(155),
         ||{
             match magic {
                 "ustar" => Some(UStarHeader {
@@ -81,16 +81,16 @@ fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
 
 fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     chain!(i,
-        name:     map_res!(take!(100), from_utf8) ~
-        mode:     map_res!(take!(8),   from_utf8) ~
-        uid:      map_res!(take!(8),   from_utf8) ~
-        gid:      map_res!(take!(8),   from_utf8) ~
-        size:     map_res!(take!(12),  from_utf8) ~
-        mtime:    map_res!(take!(12),  from_utf8) ~
-        chksum:   map_res!(take!(8),   from_utf8) ~
-        typeflag: take!(1)                        ~
-        linkname: map_res!(take!(100), from_utf8) ~
-        ustar:    parse_ustar                     ~
+        name:     take_str!(100) ~
+        mode:     take_str!(8)   ~
+        uid:      take_str!(8)   ~
+        gid:      take_str!(8)   ~
+        size:     take_str!(12)  ~
+        mtime:    take_str!(12)  ~
+        chksum:   take_str!(8)   ~
+        typeflag: take!(1)       ~
+        linkname: take_str!(100) ~
+        ustar:    parse_ustar    ~
         take!(12), /* padding to 512 */
         ||{
             PosixHeader {
@@ -116,7 +116,7 @@ fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &str> {
         t => 512 - t
     };
     chain!(i,
-        contents: map_res!(take!(size as usize), from_utf8) ~
+        contents: take_str!(size as usize) ~
         take!(padding as usize),
         ||{
             contents
