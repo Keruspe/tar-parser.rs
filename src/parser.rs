@@ -5,12 +5,12 @@ use nom::IResult;
 pub struct PosixHeader<'a> {
     pub name:     & 'a str,
     pub mode:     & 'a str,
-    pub uid:      & 'a str,
-    pub gid:      & 'a str,
-    pub size:     & 'a str,
-    pub mtime:    & 'a str,
+    pub uid:      u32,
+    pub gid:      u32,
+    pub size:     u32,
+    pub mtime:    u32,
     pub chksum:   & 'a str,
-    pub typeflag: char,
+    pub typeflag: char, /* TODO: enum */
     pub linkname: & 'a str,
     pub ustar:    Option<UStarHeader<'a>>
 }
@@ -63,7 +63,7 @@ fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
         prefix:   map_res!(take!(155), from_utf8),
         ||{
             match magic {
-                "ustar" => Some(UStarHeader{
+                "ustar" => Some(UStarHeader {
                     magic:    magic,
                     version:  version,
                     uname:    uname,
@@ -95,10 +95,10 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
             PosixHeader {
                 name:     name,
                 mode:     mode,
-                uid:      uid,
-                gid:      gid,
-                size:     size,
-                mtime:    mtime,
+                uid:      decimal_to_u32(uid),
+                gid:      decimal_to_u32(gid),
+                size:     octal_to_u32(size),
+                mtime:    octal_to_u32(mtime),
                 chksum:   chksum,
                 typeflag: typeflag[0] as char,
                 linkname: linkname,
