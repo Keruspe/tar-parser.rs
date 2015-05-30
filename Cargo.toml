@@ -3,5 +3,5 @@ name    = "tar"
 version = "0.0.1"
 authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 
-[dependencies]
-nom = "~0.3.0"
+[dependencies.nom]
+git = "https://github.com/Geal/nom"

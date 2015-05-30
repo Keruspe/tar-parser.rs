@@ -109,14 +109,33 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     )
 }
 
+fn parse_contents(i: &[u8], size: u32) -> IResult<&[u8], &str> {
+    let trailing = size % 512;
+    let padding = match trailing {
+        0 => 0,
+        t => 512 - t
+    };
+    chain!(i,
+        contents: map_res!(take!(size as usize), from_utf8) ~
+        take!(padding as usize),
+        ||{
+            contents
+        }
+    )
+}
+
+macro_rules! apply (
+ ($i:expr, $fun:expr, $arg:expr ) => ( $fun( $i, $arg ) );
+);
+
 fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
     chain!(i,
-        header: parse_header,
-        /* TODO: contents */
+        header:   parse_header ~
+        contents: apply!(parse_contents, header.size),
         ||{
             TarEntry {
                 header: header,
-                contents: ""
+                contents: contents
             }
         }
     )
