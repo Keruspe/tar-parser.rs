@@ -5,10 +5,10 @@ use nom::IResult;
 pub struct PosixHeader<'a> {
     pub name:     & 'a str,
     pub mode:     & 'a str,
-    pub uid:      u32,
-    pub gid:      u32,
-    pub size:     u32,
-    pub mtime:    u32,
+    pub uid:      u64,
+    pub gid:      u64,
+    pub size:     u64,
+    pub mtime:    u64,
     pub chksum:   & 'a str,
     pub typeflag: char, /* TODO: enum */
     pub linkname: & 'a str,
@@ -33,24 +33,24 @@ pub struct TarEntry<'a> {
 }
 
 /* TODO: validation */
-fn str_to_u32(s: &str, base: u32) -> u32 {
+fn str_to_u64(s: &str, base: u64) -> u64 {
     let mut u = 0;
     let mut f = 1;
 
-    for c in s.chars().rev() {
-        u += f * ((c as u32) - ('0' as u32));
+    for c in s.chars().rev().skip_while(|&c| c == '\0') {
+        u += f * ((c as u64) - ('0' as u64));
         f *= base;
     }
 
     u
 }
 
-pub fn octal_to_u32(o: &str) -> u32 {
-    str_to_u32(o, 8)
+pub fn octal_to_u64(o: &str) -> u64 {
+    str_to_u64(o, 8)
 }
 
-pub fn decimal_to_u32(d: &str) -> u32 {
-    str_to_u32(d, 10)
+pub fn decimal_to_u64(d: &str) -> u64 {
+    str_to_u64(d, 10)
 }
 
 fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
@@ -96,10 +96,10 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
             PosixHeader {
                 name:     name,
                 mode:     mode,
-                uid:      decimal_to_u32(uid),
-                gid:      decimal_to_u32(gid),
-                size:     octal_to_u32(size),
-                mtime:    octal_to_u32(mtime),
+                uid:      decimal_to_u64(uid),
+                gid:      decimal_to_u64(gid),
+                size:     octal_to_u64(size),
+                mtime:    octal_to_u64(mtime), /* TODO: u64 */
                 chksum:   chksum,
                 typeflag: typeflag[0] as char,
                 linkname: linkname,
@@ -109,7 +109,7 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     )
 }
 
-fn parse_contents(i: &[u8], size: u32) -> IResult<&[u8], &str> {
+fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &str> {
     let trailing = size % 512;
     let padding = match trailing {
         0 => 0,
