@@ -69,7 +69,8 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
         chksum:   map_res!(take!(8),   from_utf8) ~
         typeflag: take!(1)                        ~
         linkname: map_res!(take!(100), from_utf8) ~
-        ustar:    parse_ustar,
+        ustar:    parse_ustar                     ~
+        take!(12), /* padding to 512 */
         ||{
             PosixHeader {
                 name:     name,
