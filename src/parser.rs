@@ -32,7 +32,7 @@ pub struct TarEntry<'a> {
     pub contents: & 'a str
 }
 
-pub fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
+fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     chain!(i,
         name:     map_res!(take!(100), from_utf8) ~
         mode:     map_res!(take!(8),   from_utf8) ~
@@ -61,7 +61,7 @@ pub fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     )
 }
 
-pub fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
+fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
     chain!(i,
         header: parse_header,
         /* TODO: contents */
