@@ -50,21 +50,19 @@ pub enum TypeFlag {
     Invalid
 }
 
-/* TODO: validation */
-fn str_to_u64(s: &str, base: u64) -> u64 {
+pub fn octal_to_u64(s: &str) -> Result<u64, &'static str> {
     let mut u = 0;
     let mut f = 1;
 
     for c in s.chars().rev().skip_while(|&c| c == '\0') {
+        if c < '0' || c > '7' {
+            return Err("invalid octal string received");
+        }
         u += f * ((c as u64) - ('0' as u64));
-        f *= base;
+        f *= 8;
     }
 
-    u
-}
-
-pub fn octal_to_u64(o: &str) -> u64 {
-    str_to_u64(o, 8)
+    Ok(u)
 }
 
 fn char_to_type_flag(c: char) -> TypeFlag {
@@ -90,12 +88,12 @@ macro_rules! take_str_eat_garbage (
 
 fn parse_ustar00(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     chain!(i,
-        tag!("00")                           ~
-        uname:    take_str_eat_garbage!(32)  ~
-        gname:    take_str_eat_garbage!(32)  ~
-        devmajor: take_str_eat_garbage!(8)   ~
-        devminor: take_str_eat_garbage!(8)   ~
-        prefix:   take_str_eat_garbage!(155) ~
+        tag!("00")                                                 ~
+        uname:    take_str_eat_garbage!(32)                        ~
+        gname:    take_str_eat_garbage!(32)                        ~
+        devmajor: map_res!(take_str_eat_garbage!(8), octal_to_u64) ~
+        devminor: map_res!(take_str_eat_garbage!(8), octal_to_u64) ~
+        prefix:   take_str_eat_garbage!(155)                       ~
         take!(12), /* padding to 512 */
         ||{
             Some(UStarHeader {
@@ -103,8 +101,8 @@ fn parse_ustar00(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
                 version:  "00",
                 uname:    uname,
                 gname:    gname,
-                devmajor: octal_to_u64(devmajor),
-                devminor: octal_to_u64(devminor),
+                devmajor: devmajor,
+                devminor: devminor,
                 prefix:   prefix
             })
         }
@@ -132,24 +130,24 @@ fn parse_posix(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
 
 fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     chain!(i,
-        name:     take_str_eat_garbage!(100) ~
-        mode:     take_str_eat_garbage!(8)   ~
-        uid:      take_str_eat_garbage!(8)   ~
-        gid:      take_str_eat_garbage!(8)   ~
-        size:     take_str_eat_garbage!(12)  ~
-        mtime:    take_str_eat_garbage!(12)  ~
-        chksum:   take_str_eat_garbage!(8)   ~
-        typeflag: take!(1)                   ~
-        linkname: take_str_eat_garbage!(100) ~
+        name:     take_str_eat_garbage!(100)                        ~
+        mode:     take_str_eat_garbage!(8)                          ~
+        uid:      map_res!(take_str_eat_garbage!(8),  octal_to_u64) ~
+        gid:      map_res!(take_str_eat_garbage!(8),  octal_to_u64) ~
+        size:     map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
+        mtime:    map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
+        chksum:   take_str_eat_garbage!(8)                          ~
+        typeflag: take!(1)                                          ~
+        linkname: take_str_eat_garbage!(100)                        ~
         ustar:    alt!(parse_ustar | parse_posix),
         ||{
             PosixHeader {
                 name:     name,
                 mode:     mode,
-                uid:      octal_to_u64(uid),
-                gid:      octal_to_u64(gid),
-                size:     octal_to_u64(size),
-                mtime:    octal_to_u64(mtime),
+                uid:      uid,
+                gid:      gid,
+                size:     size,
+                mtime:    mtime,
                 chksum:   chksum,
                 typeflag: char_to_type_flag(typeflag[0] as char),
                 linkname: linkname,
@@ -201,7 +199,7 @@ mod tests {
 
     #[test]
     fn octal_to_u64_test() {
-        assert_eq!(octal_to_u64("756"), 494);
-        assert_eq!(octal_to_u64(""), 0);
+        assert_eq!(octal_to_u64("756"), Ok(494));
+        assert_eq!(octal_to_u64(""), Ok(0));
     }
 }
