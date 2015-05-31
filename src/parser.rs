@@ -21,8 +21,8 @@ pub struct UStarHeader<'a> {
     pub version:  & 'a str,
     pub uname:    & 'a str,
     pub gname:    & 'a str,
-    pub devmajor: & 'a str,
-    pub devminor: & 'a str,
+    pub devmajor: u64,
+    pub devminor: u64,
     pub prefix:   & 'a str,
 }
 
@@ -65,8 +65,8 @@ fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
                 version:  version,
                 uname:    uname,
                 gname:    gname,
-                devmajor: devmajor,
-                devminor: devminor,
+                devmajor: octal_to_u64(devmajor),
+                devminor: octal_to_u64(devminor),
                 prefix:   prefix
             })
         }
