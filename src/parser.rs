@@ -198,8 +198,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn octal_to_u64_test() {
+    fn octal_to_u64_ok_test() {
         assert_eq!(octal_to_u64("756"), Ok(494));
         assert_eq!(octal_to_u64(""), Ok(0));
+    }
+
+    #[test]
+    fn octal_to_u64_error_test() {
+        assert_eq!(octal_to_u64("1238"), Err("invalid octal string received"));
+        assert_eq!(octal_to_u64("a"), Err("invalid octal string received"));
+        assert_eq!(octal_to_u64("A"), Err("invalid octal string received"));
     }
 }
