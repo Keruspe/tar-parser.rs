@@ -196,6 +196,8 @@ pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::from_utf8;
+    use nom::IResult;
 
     #[test]
     fn octal_to_u64_ok_test() {
@@ -208,5 +210,12 @@ mod tests {
         assert_eq!(octal_to_u64("1238"), Err("invalid octal string received"));
         assert_eq!(octal_to_u64("a"), Err("invalid octal string received"));
         assert_eq!(octal_to_u64("A"), Err("invalid octal string received"));
+    }
+
+    #[test]
+    fn take_str_eat_garbage_test() {
+        let s = b"foobar\0\0\0\0baz";
+        let baz = b"baz";
+        assert_eq!(take_str_eat_garbage!(&s[..], 10), IResult::Done(&baz[..], "foobar"));
     }
 }
