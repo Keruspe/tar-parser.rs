@@ -49,10 +49,6 @@ pub fn octal_to_u64(o: &str) -> u64 {
     str_to_u64(o, 8)
 }
 
-pub fn decimal_to_u64(d: &str) -> u64 {
-    str_to_u64(d, 10)
-}
-
 fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     chain!(i,
         magic:    take_str!(6)  ~
@@ -96,8 +92,8 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
             PosixHeader {
                 name:     name,
                 mode:     mode,
-                uid:      decimal_to_u64(uid),
-                gid:      decimal_to_u64(gid),
+                uid:      octal_to_u64(uid),
+                gid:      octal_to_u64(gid),
                 size:     octal_to_u64(size),
                 mtime:    octal_to_u64(mtime), /* TODO: u64 */
                 chksum:   chksum,
@@ -154,18 +150,6 @@ mod tests {
         match octal_to_u64("") {
             0 => {},
             o => panic!("octal_to_u64 failed, expected 0 but got {}", o)
-        }
-    }
-
-    #[test]
-    fn decimal_to_u64_test() {
-        match decimal_to_u64("756") {
-            756 => {},
-            d => panic!("decimal_to_u64 failed, expected 756 but got {}", d)
-        }
-        match decimal_to_u64("") {
-            0 => {},
-            d => panic!("decimal_to_u64 failed, expected 0 but got {}", d)
         }
     }
 }
