@@ -1,4 +1,5 @@
 use std::str::from_utf8;
+use std::result::Result;
 use nom::IResult;
 
 #[derive(Debug,PartialEq,Eq)]
@@ -186,8 +187,12 @@ fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
     )
 }
 
+fn filter_entries(entries: Vec<TarEntry>) -> Result<Vec<TarEntry>, &'static str> {
+    Ok(entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry>>())
+}
+
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
-    many0!(i, parse_entry)
+    map_res!(i, many0!(parse_entry), filter_entries)
 }
 
 #[cfg(test)]
