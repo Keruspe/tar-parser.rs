@@ -6,5 +6,5 @@ authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 [dependencies]
 nom = "~0.3.2"
 
-[dependencies.tar]
+[dependencies.tar-parser]
 path = ".."
