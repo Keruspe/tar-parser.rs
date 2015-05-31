@@ -201,13 +201,7 @@ mod tests {
 
     #[test]
     fn octal_to_u64_test() {
-        match octal_to_u64("756") {
-            494 => {},
-            o => panic!("octal_to_u64 failed, expected 494 but got {}", o)
-        }
-        match octal_to_u64("") {
-            0 => {},
-            o => panic!("octal_to_u64 failed, expected 0 but got {}", o)
-        }
+        assert_eq!(octal_to_u64("756"), 494);
+        assert_eq!(octal_to_u64(""), 0);
     }
 }
