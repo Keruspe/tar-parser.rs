@@ -10,7 +10,7 @@ pub struct PosixHeader<'a> {
     pub size:     u64,
     pub mtime:    u64,
     pub chksum:   & 'a str,
-    pub typeflag: char, /* TODO: enum */
+    pub typeflag: TypeFlag,
     pub linkname: & 'a str,
     pub ustar:    Option<UStarHeader<'a>>
 }
@@ -32,6 +32,23 @@ pub struct TarEntry<'a> {
     pub contents: & 'a str
 }
 
+/* TODO: support vendor specific + sparse */
+#[derive(Debug,PartialEq,Eq)]
+pub enum TypeFlag {
+    NormalFile,
+    HardLink,
+    SymbolicLink,
+    CharacterSpecial,
+    BlockSpecial,
+    Directory,
+    FIFO,
+    ContiguousFile,
+    GlobalExtendedHeaderWithMetadata,
+    ExtendedHeaderWithMetadataForNext,
+    VendorSpecific,
+    Invalid
+}
+
 /* TODO: validation */
 fn str_to_u64(s: &str, base: u64) -> u64 {
     let mut u = 0;
@@ -47,6 +64,23 @@ fn str_to_u64(s: &str, base: u64) -> u64 {
 
 pub fn octal_to_u64(o: &str) -> u64 {
     str_to_u64(o, 8)
+}
+
+fn char_to_type_flag(c: char) -> TypeFlag {
+    match c {
+        '0' => TypeFlag::NormalFile,
+        '1' => TypeFlag::HardLink,
+        '2' => TypeFlag::SymbolicLink,
+        '3' => TypeFlag::CharacterSpecial,
+        '4' => TypeFlag::BlockSpecial,
+        '5' => TypeFlag::Directory,
+        '6' => TypeFlag::FIFO,
+        '7' => TypeFlag::ContiguousFile,
+        'g' => TypeFlag::GlobalExtendedHeaderWithMetadata,
+        'x' => TypeFlag::ExtendedHeaderWithMetadataForNext,
+        'A' ... 'Z' => TypeFlag::VendorSpecific,
+        _ => TypeFlag::Invalid
+    }
 }
 
 fn parse_ustar00(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
@@ -112,7 +146,7 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
                 size:     octal_to_u64(size),
                 mtime:    octal_to_u64(mtime),
                 chksum:   chksum,
-                typeflag: typeflag[0] as char,
+                typeflag: char_to_type_flag(typeflag[0] as char),
                 linkname: linkname,
                 ustar:    ustar
             }
