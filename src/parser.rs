@@ -60,7 +60,7 @@ fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
         prefix:   take_str!(155),
         ||{
             match magic {
-                "ustar" => Some(UStarHeader {
+                "ustar\0" => Some(UStarHeader {
                     magic:    magic,
                     version:  version,
                     uname:    uname,
