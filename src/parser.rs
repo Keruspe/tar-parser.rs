@@ -51,26 +51,33 @@ pub fn octal_to_u64(o: &str) -> u64 {
 
 fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     chain!(i,
-        magic:    take_str!(6)  ~
-        version:  take_str!(2)  ~
-        uname:    take_str!(32) ~
-        gname:    take_str!(32) ~
-        devmajor: take_str!(8)  ~
-        devminor: take_str!(8)  ~
-        prefix:   take_str!(155),
+        tag!("ustar\0")          ~
+        version:  take_str!(2)   ~
+        uname:    take_str!(32)  ~
+        gname:    take_str!(32)  ~
+        devmajor: take_str!(8)   ~
+        devminor: take_str!(8)   ~
+        prefix:   take_str!(155) ~
+        take!(12), /* padding to 512 */
         ||{
-            match magic {
-                "ustar\0" => Some(UStarHeader {
-                    magic:    magic,
-                    version:  version,
-                    uname:    uname,
-                    gname:    gname,
-                    devmajor: devmajor,
-                    devminor: devminor,
-                    prefix:   prefix
-                }),
-                _ => None,
-            }
+            Some(UStarHeader {
+                magic:    "ustar\0",
+                version:  version,
+                uname:    uname,
+                gname:    gname,
+                devmajor: devmajor,
+                devminor: devminor,
+                prefix:   prefix
+            })
+        }
+    )
+}
+
+fn parse_posix(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
+    chain!(i,
+        take!(255), /* padding to 512 */
+        ||{
+            None
         }
     )
 }
@@ -86,8 +93,7 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
         chksum:   take_str!(8)   ~
         typeflag: take!(1)       ~
         linkname: take_str!(100) ~
-        ustar:    parse_ustar    ~
-        take!(12), /* padding to 512 */
+        ustar:    alt!(parse_ustar | parse_posix),
         ||{
             PosixHeader {
                 name:     name,
@@ -95,7 +101,7 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
                 uid:      octal_to_u64(uid),
                 gid:      octal_to_u64(gid),
                 size:     octal_to_u64(size),
-                mtime:    octal_to_u64(mtime), /* TODO: u64 */
+                mtime:    octal_to_u64(mtime),
                 chksum:   chksum,
                 typeflag: typeflag[0] as char,
                 linkname: linkname,
