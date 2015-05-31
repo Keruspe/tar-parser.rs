@@ -68,7 +68,7 @@ pub fn octal_to_u64(o: &str) -> u64 {
 
 fn char_to_type_flag(c: char) -> TypeFlag {
     match c {
-        '0' => TypeFlag::NormalFile,
+        '0' | '\0' => TypeFlag::NormalFile,
         '1' => TypeFlag::HardLink,
         '2' => TypeFlag::SymbolicLink,
         '3' => TypeFlag::CharacterSpecial,
