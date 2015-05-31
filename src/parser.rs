@@ -83,14 +83,18 @@ fn char_to_type_flag(c: char) -> TypeFlag {
     }
 }
 
+macro_rules! take_str_eat_garbage (
+ ( $i:expr, $size:expr ) => ( chain!( $i, s: map_res!(take_until!("\0"), from_utf8) ~ take!($size - s.len()), ||{ s } ));
+);
+
 fn parse_ustar00(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     chain!(i,
-        tag!("00")               ~
-        uname:    take_str!(32)  ~
-        gname:    take_str!(32)  ~
-        devmajor: take_str!(8)   ~
-        devminor: take_str!(8)   ~
-        prefix:   take_str!(155) ~
+        tag!("00")                           ~
+        uname:    take_str_eat_garbage!(32)  ~
+        gname:    take_str_eat_garbage!(32)  ~
+        devmajor: take_str_eat_garbage!(8)   ~
+        devminor: take_str_eat_garbage!(8)   ~
+        prefix:   take_str_eat_garbage!(155) ~
         take!(12), /* padding to 512 */
         ||{
             Some(UStarHeader {
@@ -127,15 +131,15 @@ fn parse_posix(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
 
 fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     chain!(i,
-        name:     take_str!(100) ~
-        mode:     take_str!(8)   ~
-        uid:      take_str!(8)   ~
-        gid:      take_str!(8)   ~
-        size:     take_str!(12)  ~
-        mtime:    take_str!(12)  ~
-        chksum:   take_str!(8)   ~
-        typeflag: take!(1)       ~
-        linkname: take_str!(100) ~
+        name:     take_str_eat_garbage!(100) ~
+        mode:     take_str_eat_garbage!(8)   ~
+        uid:      take_str_eat_garbage!(8)   ~
+        gid:      take_str_eat_garbage!(8)   ~
+        size:     take_str_eat_garbage!(12)  ~
+        mtime:    take_str_eat_garbage!(12)  ~
+        chksum:   take_str_eat_garbage!(8)   ~
+        typeflag: take!(1)                   ~
+        linkname: take_str_eat_garbage!(100) ~
         ustar:    alt!(parse_ustar | parse_posix),
         ||{
             PosixHeader {
