@@ -49,10 +49,9 @@ pub fn octal_to_u64(o: &str) -> u64 {
     str_to_u64(o, 8)
 }
 
-fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
+fn parse_ustar00(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     chain!(i,
-        tag!("ustar\0")          ~
-        version:  take_str!(2)   ~
+        tag!("00")               ~
         uname:    take_str!(32)  ~
         gname:    take_str!(32)  ~
         devmajor: take_str!(8)   ~
@@ -62,13 +61,23 @@ fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
         ||{
             Some(UStarHeader {
                 magic:    "ustar\0",
-                version:  version,
+                version:  "00",
                 uname:    uname,
                 gname:    gname,
                 devmajor: octal_to_u64(devmajor),
                 devminor: octal_to_u64(devminor),
                 prefix:   prefix
             })
+        }
+    )
+}
+
+fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
+    chain!(i,
+        tag!("ustar\0") ~
+        ustar: parse_ustar00,
+        ||{
+            ustar
         }
     )
 }
