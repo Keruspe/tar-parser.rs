@@ -13,7 +13,13 @@ pub struct PosixHeader<'a> {
     pub chksum:   & 'a str,
     pub typeflag: TypeFlag,
     pub linkname: & 'a str,
-    pub ustar:    Option<UStarHeader<'a>>
+    pub ustar:    ExtraHeader<'a>
+}
+
+#[derive(Debug,PartialEq,Eq)]
+pub enum ExtraHeader<'a> {
+    UStar(UStarHeader<'a>),
+    Padding
 }
 
 #[derive(Debug,PartialEq,Eq)]
@@ -26,6 +32,9 @@ pub struct UStarHeader<'a> {
     pub devminor: u64,
     pub prefix:   & 'a str,
 }
+
+#[derive(Debug,PartialEq,Eq)]
+pub struct Padding;
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct TarEntry<'a> {
@@ -84,7 +93,7 @@ macro_rules! take_str_eat_garbage (
  ( $i:expr, $size:expr ) => ( chain!( $i, s: map_res!(take_until!("\0"), from_utf8) ~ take!($size - s.len()), ||{ s } ));
 );
 
-fn parse_ustar00(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
+fn parse_ustar00(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
     chain!(i,
         tag!("00")                                                 ~
         uname:    take_str_eat_garbage!(32)                        ~
@@ -94,7 +103,7 @@ fn parse_ustar00(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
         prefix:   take_str_eat_garbage!(155)                       ~
         take!(12), /* padding to 512 */
         ||{
-            Some(UStarHeader {
+            ExtraHeader::UStar(UStarHeader {
                 magic:    "ustar\0",
                 version:  "00",
                 uname:    uname,
@@ -107,7 +116,7 @@ fn parse_ustar00(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     )
 }
 
-fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
+fn parse_ustar(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
     chain!(i,
         tag!("ustar\0") ~
         ustar: parse_ustar00,
@@ -117,11 +126,11 @@ fn parse_ustar(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
     )
 }
 
-fn parse_posix(i: &[u8]) -> IResult<&[u8], Option<UStarHeader>> {
+fn parse_posix(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
     chain!(i,
         take!(255), /* padding to 512 */
         ||{
-            None
+            ExtraHeader::Padding
         }
     )
 }
