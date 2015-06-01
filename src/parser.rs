@@ -5,25 +5,25 @@ use nom::IResult;
 #[derive(Debug,PartialEq,Eq)]
 pub struct TarEntry<'a> {
     pub header:   PosixHeader<'a>,
-    pub contents: & 'a str
+    pub contents: &'a str
 }
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct PosixHeader<'a> {
-    pub name:     & 'a str,
-    pub mode:     & 'a str,
+    pub name:     &'a str,
+    pub mode:     &'a str,
     pub uid:      u64,
     pub gid:      u64,
     pub size:     u64,
     pub mtime:    u64,
-    pub chksum:   & 'a str,
+    pub chksum:   &'a str,
     pub typeflag: TypeFlag,
-    pub linkname: & 'a str,
+    pub linkname: &'a str,
     pub ustar:    ExtraHeader<'a>
 }
 
 /* TODO: support vendor specific + sparse */
-#[derive(Debug,PartialEq,Eq)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum TypeFlag {
     NormalFile,
     HardLink,
@@ -46,13 +46,23 @@ pub enum ExtraHeader<'a> {
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct UStarHeader<'a> {
-    pub magic:    & 'a str,
-    pub version:  & 'a str,
-    pub uname:    & 'a str,
-    pub gname:    & 'a str,
+    pub magic:    &'a str,
+    pub version:  &'a str,
+    pub uname:    &'a str,
+    pub gname:    &'a str,
     pub devmajor: u64,
     pub devminor: u64,
-    pub prefix:   & 'a str,
+    pub extra:    UStarExtraHeader<'a>
+}
+
+#[derive(Debug,PartialEq,Eq)]
+pub enum UStarExtraHeader<'a> {
+    PosixUStar(PosixUStarHeader<'a>)
+}
+
+#[derive(Debug,PartialEq,Eq)]
+pub struct PosixUStarHeader<'a> {
+    pub prefix: &'a str
 }
 
 #[derive(Debug,PartialEq,Eq)]
@@ -89,19 +99,40 @@ fn char_to_type_flag(c: char) -> TypeFlag {
     }
 }
 
+fn parse_type_flag(i: &[u8]) -> Result<TypeFlag, &'static str> {
+    Ok(char_to_type_flag(i[0] as char))
+}
+
 macro_rules! take_str_eat_garbage (
  ( $i:expr, $size:expr ) => ( chain!( $i, s: map_res!(take_until!("\0"), from_utf8) ~ take!($size - s.len()), ||{ s } ));
 );
 
-fn parse_ustar00(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
+fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
+    chain!(i,
+        prefix: take_str_eat_garbage!(155) ~
+        take!(12),
+        ||{
+            UStarExtraHeader::PosixUStar(PosixUStarHeader {
+                prefix: prefix
+            })
+        }
+    )
+}
+
+fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader> {
+    match flag {
+        _ => parse_ustar00_extra_posix(i)
+    }
+}
+
+fn parse_ustar00(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader> {
     chain!(i,
         tag!("00")                                                 ~
         uname:    take_str_eat_garbage!(32)                        ~
         gname:    take_str_eat_garbage!(32)                        ~
         devmajor: map_res!(take_str_eat_garbage!(8), octal_to_u64) ~
         devminor: map_res!(take_str_eat_garbage!(8), octal_to_u64) ~
-        prefix:   take_str_eat_garbage!(155)                       ~
-        take!(12), /* padding to 512 */
+        extra:    apply!(parse_ustar00_extra, flag),
         ||{
             ExtraHeader::UStar(UStarHeader {
                 magic:    "ustar\0",
@@ -110,16 +141,16 @@ fn parse_ustar00(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
                 gname:    gname,
                 devmajor: devmajor,
                 devminor: devminor,
-                prefix:   prefix
+                extra:    extra
             })
         }
     )
 }
 
-fn parse_ustar(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
+fn parse_ustar(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader> {
     chain!(i,
         tag!("ustar\0") ~
-        ustar: parse_ustar00,
+        ustar: apply!(parse_ustar00, flag),
         ||{
             ustar
         }
@@ -144,9 +175,9 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
         size:     map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
         mtime:    map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
         chksum:   take_str_eat_garbage!(8)                          ~
-        typeflag: take!(1)                                          ~
+        typeflag: map_res!(take!(1), parse_type_flag)               ~
         linkname: take_str_eat_garbage!(100)                        ~
-        ustar:    alt!(parse_ustar | parse_posix),
+        ustar:    alt!(apply!(parse_ustar, typeflag) | parse_posix),
         ||{
             PosixHeader {
                 name:     name,
@@ -156,7 +187,7 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
                 size:     size,
                 mtime:    mtime,
                 chksum:   chksum,
-                typeflag: char_to_type_flag(typeflag[0] as char),
+                typeflag: typeflag,
                 linkname: linkname,
                 ustar:    ustar
             }
