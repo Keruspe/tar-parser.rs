@@ -2,6 +2,10 @@ use std::str::from_utf8;
 use std::result::Result;
 use nom::IResult;
 
+/*
+ * Core structs
+ */
+
 #[derive(Debug,PartialEq,Eq)]
 pub struct TarEntry<'a> {
     pub header:   PosixHeader<'a>,
@@ -86,6 +90,32 @@ pub struct Sparse {
 #[derive(Debug,PartialEq,Eq)]
 pub struct Padding;
 
+/*
+ * Useful macros
+ */
+
+macro_rules! take_str_eat_garbage (
+    ( $i:expr, $size:expr ) => (
+        chain!($i,
+            s: map_res!(take_until!("\0"), from_utf8) ~
+            take!($size - s.len()),
+            ||{
+                s
+            }
+        )
+    );
+);
+
+named!(parse_str4<&[u8], &str>, take_str_eat_garbage!(4));
+named!(parse_str8<&[u8], &str>, take_str_eat_garbage!(8));
+named!(parse_str32<&[u8], &str>, take_str_eat_garbage!(32));
+named!(parse_str100<&[u8], &str>, take_str_eat_garbage!(100));
+named!(parse_str155<&[u8], &str>, take_str_eat_garbage!(155));
+
+/*
+ * Octal string parsing
+ */
+
 pub fn octal_to_u64(s: &str) -> Result<u64, &'static str> {
     let mut u = 0;
 
@@ -99,6 +129,17 @@ pub fn octal_to_u64(s: &str) -> Result<u64, &'static str> {
 
     Ok(u)
 }
+
+fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
+    map_res!(i, take_str_eat_garbage!(n), octal_to_u64)
+}
+
+named!(parse_octal8<&[u8], u64>, apply!(parse_octal, 8));
+named!(parse_octal12<&[u8], u64>, apply!(parse_octal, 12));
+
+/*
+ * TypeFlag parsing
+ */
 
 fn char_to_type_flag(c: char) -> TypeFlag {
     match c {
@@ -117,26 +158,20 @@ fn char_to_type_flag(c: char) -> TypeFlag {
     }
 }
 
-fn parse_type_flag(i: &[u8]) -> Result<TypeFlag, &'static str> {
+fn bytes_to_type_flag(i: &[u8]) -> Result<TypeFlag, &'static str> {
     Ok(char_to_type_flag(i[0] as char))
 }
 
-macro_rules! take_str_eat_garbage (
-    ( $i:expr, $size:expr ) => (
-        chain!($i,
-            s: map_res!(take_until!("\0"), from_utf8) ~
-            take!($size - s.len()),
-            ||{
-                s
-            }
-        )
-    );
-);
+named!(parse_type_flag<&[u8], TypeFlag>, map_res!(take!(1), bytes_to_type_flag));
+
+/*
+ * Sparse parsing
+ */
 
 fn parse_one_sparse(i: &[u8]) -> IResult<&[u8], Sparse> {
     chain!(i,
-        offset:   map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
-        numbytes: map_res!(take_str_eat_garbage!(12), octal_to_u64),
+        offset:   parse_octal12 ~
+        numbytes: parse_octal12,
         ||{
             Sparse {
                 offset:   offset,
@@ -150,20 +185,30 @@ fn parse_sparse(i: &[u8]) -> IResult<&[u8], [Sparse; 4]> {
     count!(i, parse_one_sparse, Sparse, 4)
 }
 
+/*
+ * Boolean parsing
+ */
+
 fn to_bool(i: &[u8]) -> Result<bool, &'static str> {
     Ok(i[0] != 0)
 }
 
+named!(parse_bool<&[u8], bool>, map_res!(take!(1), to_bool));
+
+/*
+ * UStar PAX extended parsing
+ */
+
 fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
     chain!(i,
-        atime:      map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
-        ctime:      map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
-        offset:     map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
-        longnames:  take_str_eat_garbage!(4)                          ~
-        take!(1)                                                      ~
-        sparse:     parse_sparse                                      ~
-        isextended: map_res!(take!(1), to_bool)                       ~
-        realsize:   map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
+        atime:      parse_octal12 ~
+        ctime:      parse_octal12 ~
+        offset:     parse_octal12 ~
+        longnames:  parse_str4    ~
+        take!(1)                  ~
+        sparse:     parse_sparse  ~
+        isextended: parse_bool    ~
+        realsize:   parse_octal12 ~
         take!(17), /* padding to 512 */
         ||{
             UStarExtraHeader::Pax(PaxHeader {
@@ -179,9 +224,13 @@ fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
     )
 }
 
+/*
+ * UStar Posix parsing
+ */
+
 fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
     chain!(i,
-        prefix: take_str_eat_garbage!(155) ~
+        prefix: parse_str155 ~
         take!(12),
         ||{
             UStarExtraHeader::PosixUStar(PosixUStarHeader {
@@ -200,11 +249,11 @@ fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHea
 
 fn parse_ustar00(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader> {
     chain!(i,
-        tag!("00")                                                 ~
-        uname:    take_str_eat_garbage!(32)                        ~
-        gname:    take_str_eat_garbage!(32)                        ~
-        devmajor: map_res!(take_str_eat_garbage!(8), octal_to_u64) ~
-        devminor: map_res!(take_str_eat_garbage!(8), octal_to_u64) ~
+        tag!("00")             ~
+        uname:    parse_str32  ~
+        gname:    parse_str32  ~
+        devmajor: parse_octal8 ~
+        devminor: parse_octal8 ~
         extra:    apply!(parse_ustar00_extra, flag),
         ||{
             ExtraHeader::UStar(UStarHeader {
@@ -230,6 +279,10 @@ fn parse_ustar(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader> {
     )
 }
 
+/*
+ * Posix tar archive header parsing
+ */
+
 fn parse_posix(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
     chain!(i,
         take!(255), /* padding to 512 */
@@ -241,15 +294,15 @@ fn parse_posix(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
 
 fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     chain!(i,
-        name:     take_str_eat_garbage!(100)                        ~
-        mode:     take_str_eat_garbage!(8)                          ~
-        uid:      map_res!(take_str_eat_garbage!(8),  octal_to_u64) ~
-        gid:      map_res!(take_str_eat_garbage!(8),  octal_to_u64) ~
-        size:     map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
-        mtime:    map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
-        chksum:   take_str_eat_garbage!(8)                          ~
-        typeflag: map_res!(take!(1), parse_type_flag)               ~
-        linkname: take_str_eat_garbage!(100)                        ~
+        name:     parse_str100    ~
+        mode:     parse_str8      ~
+        uid:      parse_octal8    ~
+        gid:      parse_octal8    ~
+        size:     parse_octal12   ~
+        mtime:    parse_octal12   ~
+        chksum:   parse_str8      ~
+        typeflag: parse_type_flag ~
+        linkname: parse_str100    ~
         ustar:    alt!(apply!(parse_ustar, typeflag) | parse_posix),
         ||{
             PosixHeader {
@@ -268,6 +321,10 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     )
 }
 
+/*
+ * Contents parsing
+ */
+
 fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &str> {
     let trailing = size % 512;
     let padding = match trailing {
@@ -283,6 +340,10 @@ fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &str> {
     )
 }
 
+/*
+ * Tar entry header + contents parsing
+ */
+
 fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
     chain!(i,
         header:   parse_header ~
@@ -296,7 +357,12 @@ fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
     )
 }
 
+/*
+ * Tar archive parsing
+ */
+
 fn filter_entries(entries: Vec<TarEntry>) -> Result<Vec<TarEntry>, &'static str> {
+    /* Filter out empty entries */
     Ok(entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry>>())
 }
 
@@ -304,6 +370,10 @@ fn filter_entries(entries: Vec<TarEntry>) -> Result<Vec<TarEntry>, &'static str>
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
     map_res!(i, many0!(parse_entry), filter_entries)
 }
+
+/*
+ * Tests
+ */
 
 #[cfg(test)]
 mod tests {
