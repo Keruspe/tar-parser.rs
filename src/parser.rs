@@ -122,7 +122,15 @@ fn parse_type_flag(i: &[u8]) -> Result<TypeFlag, &'static str> {
 }
 
 macro_rules! take_str_eat_garbage (
- ( $i:expr, $size:expr ) => ( chain!( $i, s: map_res!(take_until!("\0"), from_utf8) ~ take!($size - s.len()), ||{ s } ));
+    ( $i:expr, $size:expr ) => (
+        chain!($i,
+            s: map_res!(take_until!("\0"), from_utf8) ~
+            take!($size - s.len()),
+            ||{
+                s
+            }
+        )
+    );
 );
 
 fn parse_one_sparse(i: &[u8]) -> IResult<&[u8], Sparse> {
