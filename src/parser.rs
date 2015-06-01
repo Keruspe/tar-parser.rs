@@ -46,8 +46,7 @@ pub enum TypeFlag {
     ContiguousFile,
     GlobalExtendedHeaderWithMetadata,
     ExtendedHeaderWithMetadataForNext,
-    VendorSpecific,
-    Invalid
+    VendorSpecific
 }
 
 pub fn octal_to_u64(s: &str) -> Result<u64, &'static str> {
@@ -77,7 +76,7 @@ fn char_to_type_flag(c: char) -> TypeFlag {
         'g' => TypeFlag::GlobalExtendedHeaderWithMetadata,
         'x' => TypeFlag::ExtendedHeaderWithMetadataForNext,
         'A' ... 'Z' => TypeFlag::VendorSpecific,
-        _ => TypeFlag::Invalid
+        _ => TypeFlag::NormalFile
     }
 }
 
