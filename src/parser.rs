@@ -3,6 +3,12 @@ use std::result::Result;
 use nom::IResult;
 
 #[derive(Debug,PartialEq,Eq)]
+pub struct TarEntry<'a> {
+    pub header:   PosixHeader<'a>,
+    pub contents: & 'a str
+}
+
+#[derive(Debug,PartialEq,Eq)]
 pub struct PosixHeader<'a> {
     pub name:     & 'a str,
     pub mode:     & 'a str,
@@ -14,6 +20,22 @@ pub struct PosixHeader<'a> {
     pub typeflag: TypeFlag,
     pub linkname: & 'a str,
     pub ustar:    ExtraHeader<'a>
+}
+
+/* TODO: support vendor specific + sparse */
+#[derive(Debug,PartialEq,Eq)]
+pub enum TypeFlag {
+    NormalFile,
+    HardLink,
+    SymbolicLink,
+    CharacterSpecial,
+    BlockSpecial,
+    Directory,
+    FIFO,
+    ContiguousFile,
+    PaxInterexchangeFormat,
+    PaxExtendedAttributes,
+    VendorSpecific
 }
 
 #[derive(Debug,PartialEq,Eq)]
@@ -35,28 +57,6 @@ pub struct UStarHeader<'a> {
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct Padding;
-
-#[derive(Debug,PartialEq,Eq)]
-pub struct TarEntry<'a> {
-    pub header:   PosixHeader<'a>,
-    pub contents: & 'a str
-}
-
-/* TODO: support vendor specific + sparse */
-#[derive(Debug,PartialEq,Eq)]
-pub enum TypeFlag {
-    NormalFile,
-    HardLink,
-    SymbolicLink,
-    CharacterSpecial,
-    BlockSpecial,
-    Directory,
-    FIFO,
-    ContiguousFile,
-    GlobalExtendedHeaderWithMetadata,
-    ExtendedHeaderWithMetadataForNext,
-    VendorSpecific
-}
 
 pub fn octal_to_u64(s: &str) -> Result<u64, &'static str> {
     let mut u = 0;
@@ -82,8 +82,8 @@ fn char_to_type_flag(c: char) -> TypeFlag {
         '5' => TypeFlag::Directory,
         '6' => TypeFlag::FIFO,
         '7' => TypeFlag::ContiguousFile,
-        'g' => TypeFlag::GlobalExtendedHeaderWithMetadata,
-        'x' => TypeFlag::ExtendedHeaderWithMetadataForNext,
+        'g' => TypeFlag::PaxInterexchangeFormat,
+        'x' => TypeFlag::PaxExtendedAttributes,
         'A' ... 'Z' => TypeFlag::VendorSpecific,
         _ => TypeFlag::NormalFile
     }
