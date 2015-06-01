@@ -57,12 +57,30 @@ pub struct UStarHeader<'a> {
 
 #[derive(Debug,PartialEq,Eq)]
 pub enum UStarExtraHeader<'a> {
-    PosixUStar(PosixUStarHeader<'a>)
+    PosixUStar(PosixUStarHeader<'a>),
+    Pax(PaxHeader<'a>)
 }
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct PosixUStarHeader<'a> {
     pub prefix: &'a str
+}
+
+#[derive(Debug,PartialEq,Eq)]
+pub struct PaxHeader<'a> {
+    pub atime:      u64,
+    pub ctime:      u64,
+    pub offset:     u64,
+    pub longnames:  &'a str,
+    pub sparse:     [Sparse; 4],
+    pub isextended: bool,
+    pub realsize:   u64
+}
+
+#[derive(Debug,PartialEq,Eq,Clone,Copy)]
+pub struct Sparse {
+    pub offset:   u64,
+    pub numbytes: u64
 }
 
 #[derive(Debug,PartialEq,Eq)]
@@ -107,6 +125,52 @@ macro_rules! take_str_eat_garbage (
  ( $i:expr, $size:expr ) => ( chain!( $i, s: map_res!(take_until!("\0"), from_utf8) ~ take!($size - s.len()), ||{ s } ));
 );
 
+fn parse_one_sparse(i: &[u8]) -> IResult<&[u8], Sparse> {
+    chain!(i,
+        offset:   map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
+        numbytes: map_res!(take_str_eat_garbage!(12), octal_to_u64),
+        ||{
+            Sparse {
+                offset:   offset,
+                numbytes: numbytes
+            }
+        }
+    )
+}
+
+fn parse_sparse(i: &[u8]) -> IResult<&[u8], [Sparse; 4]> {
+    count!(i, parse_one_sparse, Sparse, 4)
+}
+
+fn to_bool(i: &[u8]) -> Result<bool, &'static str> {
+    Ok(i[0] != 0)
+}
+
+fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
+    chain!(i,
+        atime:      map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
+        ctime:      map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
+        offset:     map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
+        longnames:  take_str_eat_garbage!(4)                          ~
+        take!(1)                                                      ~
+        sparse:     parse_sparse                                      ~
+        isextended: map_res!(take!(1), to_bool)                       ~
+        realsize:   map_res!(take_str_eat_garbage!(12), octal_to_u64) ~
+        take!(17), /* padding to 512 */
+        ||{
+            UStarExtraHeader::Pax(PaxHeader {
+                atime:      atime,
+                ctime:      ctime,
+                offset:     offset,
+                longnames:  longnames,
+                sparse:     sparse,
+                isextended: isextended,
+                realsize:   realsize
+            })
+        }
+    )
+}
+
 fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
     chain!(i,
         prefix: take_str_eat_garbage!(155) ~
@@ -121,6 +185,7 @@ fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
 
 fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader> {
     match flag {
+        TypeFlag::PaxInterexchangeFormat => parse_ustar00_extra_pax(i),
         _ => parse_ustar00_extra_posix(i)
     }
 }
@@ -227,6 +292,7 @@ fn filter_entries(entries: Vec<TarEntry>) -> Result<Vec<TarEntry>, &'static str>
     Ok(entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry>>())
 }
 
+// TODO: eof
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
     map_res!(i, many0!(parse_entry), filter_entries)
 }

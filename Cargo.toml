@@ -11,5 +11,5 @@ license     = "MIT"
 [lib]
 name="tar"
 
-[dependencies]
-nom = "~0.3.2"
+[dependencies.nom]
+git = "git://github.com/Keruspe/nom"
