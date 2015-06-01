@@ -52,14 +52,13 @@ pub enum TypeFlag {
 
 pub fn octal_to_u64(s: &str) -> Result<u64, &'static str> {
     let mut u = 0;
-    let mut f = 1;
 
-    for c in s.chars().rev().skip_while(|&c| c == '\0') {
+    for c in s.chars() {
         if c < '0' || c > '7' {
             return Err("invalid octal string received");
         }
-        u += f * ((c as u64) - ('0' as u64));
-        f *= 8;
+        u *= 8;
+        u += (c as u64) - ('0' as u64);
     }
 
     Ok(u)
