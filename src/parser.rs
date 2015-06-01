@@ -1,6 +1,6 @@
 use std::str::from_utf8;
 use std::result::Result;
-use nom::IResult;
+use nom::{IResult,eof};
 
 /*
  * Core structs
@@ -366,9 +366,14 @@ fn filter_entries(entries: Vec<TarEntry>) -> Result<Vec<TarEntry>, &'static str>
     Ok(entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry>>())
 }
 
-// TODO: eof
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
-    map_res!(i, many0!(parse_entry), filter_entries)
+    chain!(i,
+        entries: map_res!(many0!(parse_entry), filter_entries) ~
+        eof,
+        ||{
+            entries
+        }
+    )
 }
 
 /*
