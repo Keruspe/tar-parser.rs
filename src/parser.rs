@@ -72,13 +72,14 @@ pub struct PosixUStarHeader<'a> {
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct PaxHeader<'a> {
-    pub atime:      u64,
-    pub ctime:      u64,
-    pub offset:     u64,
-    pub longnames:  &'a str,
-    pub sparse:     [Sparse; 4],
-    pub isextended: bool,
-    pub realsize:   u64
+    pub atime:         u64,
+    pub ctime:         u64,
+    pub offset:        u64,
+    pub longnames:     &'a str,
+    pub sparse:        [Sparse; 4],
+    pub isextended:    bool,
+    pub realsize:      u64,
+    pub extra_sparses: Vec<Sparse>
 }
 
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
@@ -185,6 +186,33 @@ fn parse_sparse(i: &[u8]) -> IResult<&[u8], [Sparse; 4]> {
     count!(i, parse_one_sparse, Sparse, 4)
 }
 
+fn add_to_vec(extra: [Sparse; 21], sparses: &mut Vec<Sparse>) -> Result<&'static str, &'static str> {
+    for sparse in &extra[..] {
+        if sparse.offset == 0 {
+            break;
+        } else {
+            sparses.push(*sparse);
+        }
+    }
+    Ok("")
+}
+
+fn parse_extra_sparses<'a>(i: &'a [u8], isextended: bool, sparses: &'a mut Vec<Sparse>) -> IResult<'a, &'a [u8], &'a mut Vec<Sparse>> {
+    if isextended {
+        chain!(i,
+            map_res!(count!(parse_one_sparse, Sparse, 21), apply!(add_to_vec, sparses)) ~
+            extended:      parse_bool                                                   ~
+            take!(7) /* padding to 512 */                                               ~
+            extra_sparses: apply!(parse_extra_sparses, extended, sparses),
+            ||{
+                extra_sparses
+            }
+        )
+    } else {
+        IResult::Done(i, sparses)
+    }
+}
+
 /*
  * Boolean parsing
  */
@@ -200,25 +228,28 @@ named!(parse_bool<&[u8], bool>, map_res!(take!(1), to_bool));
  */
 
 fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
+    let sparses : Vec<Sparse> = Vec::new();
     chain!(i,
-        atime:      parse_octal12 ~
-        ctime:      parse_octal12 ~
-        offset:     parse_octal12 ~
-        longnames:  parse_str4    ~
-        take!(1)                  ~
-        sparse:     parse_sparse  ~
-        isextended: parse_bool    ~
-        realsize:   parse_octal12 ~
-        take!(17), /* padding to 512 */
+        atime:         parse_octal12 ~
+        ctime:         parse_octal12 ~
+        offset:        parse_octal12 ~
+        longnames:     parse_str4    ~
+        take!(1)                     ~
+        sparse:        parse_sparse  ~
+        isextended:    parse_bool    ~
+        realsize:      parse_octal12 ~
+        take!(17)                    ~ /* padding to 512 */
+        apply!(parse_extra_sparses, isextended, &mut sparses),
         ||{
             UStarExtraHeader::Pax(PaxHeader {
-                atime:      atime,
-                ctime:      ctime,
-                offset:     offset,
-                longnames:  longnames,
-                sparse:     sparse,
-                isextended: isextended,
-                realsize:   realsize
+                atime:         atime,
+                ctime:         ctime,
+                offset:        offset,
+                longnames:     longnames,
+                sparse:        sparse,
+                isextended:    isextended,
+                realsize:      realsize,
+                extra_sparses: sparses
             })
         }
     )
