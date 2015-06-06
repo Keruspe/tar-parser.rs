@@ -1,6 +1,6 @@
 use std::str::from_utf8;
 use std::result::Result;
-use nom::{IResult,eof};
+use nom::*;
 
 /*
  * Core structs
@@ -72,14 +72,13 @@ pub struct PosixUStarHeader<'a> {
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct PaxHeader<'a> {
-    pub atime:         u64,
-    pub ctime:         u64,
-    pub offset:        u64,
-    pub longnames:     &'a str,
-    pub sparse:        [Sparse; 4],
-    pub isextended:    bool,
-    pub realsize:      u64,
-    pub extra_sparses: Vec<Sparse>
+    pub atime:      u64,
+    pub ctime:      u64,
+    pub offset:     u64,
+    pub longnames:  &'a str,
+    pub sparses:    Vec<Sparse>,
+    pub isextended: bool,
+    pub realsize:   u64,
 }
 
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
@@ -112,6 +111,51 @@ named!(parse_str8<&[u8], &str>, take_str_eat_garbage!(8));
 named!(parse_str32<&[u8], &str>, take_str_eat_garbage!(32));
 named!(parse_str100<&[u8], &str>, take_str_eat_garbage!(100));
 named!(parse_str155<&[u8], &str>, take_str_eat_garbage!(155));
+
+macro_rules! take_until_expr_with_limit(
+  ($i:expr, $submac:ident!( $($args:tt)* ), $stop: expr, $limit: expr) => (
+    {
+      let mut begin = 0;
+      let mut remaining = $i.len();
+      let mut res = Vec::new();
+      let mut cnt = 0;
+      let mut err = false;
+      loop {
+        match $submac!(&$i[begin..], $($args)*) {
+          IResult::Done(i,o) => {
+            if $stop(o) {
+              break
+            }
+            res.push(o);
+            begin += remaining - i.len();
+            remaining = i.len();
+            cnt = cnt + 1;
+            if cnt == $limit {
+              break
+            }
+          },
+          IResult::Error(_)  => {
+            err = true;
+            break;
+          },
+          IResult::Incomplete(_) => {
+            break;
+          }
+        }
+      }
+      if err {
+        IResult::Error(Err::Position(ErrorCode::Count as u32,$i))
+      } else if cnt == $limit {
+        IResult::Done(&$i[begin..], res)
+      } else {
+        IResult::Incomplete(Needed::Unknown)
+      }
+    }
+  );
+  ($i:expr, $f:expr, $stop: expr, $limit: expr) => (
+    take_until_expr_with_limit!($i, call!($f), $stop, $limit);
+  );
+);
 
 /*
  * Octal string parsing
@@ -182,17 +226,13 @@ fn parse_one_sparse(i: &[u8]) -> IResult<&[u8], Sparse> {
     )
 }
 
-fn parse_sparse(i: &[u8]) -> IResult<&[u8], [Sparse; 4]> {
-    count!(i, parse_one_sparse, Sparse, 4)
+fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse>> {
+    take_until_expr_with_limit!(i, parse_one_sparse, |s: Sparse| s.offset == 0 && s.numbytes == 0, limit)
 }
 
-fn add_to_vec(extra: [Sparse; 21], sparses: &mut Vec<Sparse>) -> Result<&'static str, &'static str> {
-    for sparse in &extra[..] {
-        if sparse.offset == 0 {
-            break;
-        } else {
-            sparses.push(*sparse);
-        }
+fn add_to_vec(extra: Vec<Sparse>, sparses: &mut Vec<Sparse>) -> Result<&'static str, &'static str> {
+    for sparse in &extra {
+        sparses.push(*sparse);
     }
     Ok("")
 }
@@ -200,7 +240,7 @@ fn add_to_vec(extra: [Sparse; 21], sparses: &mut Vec<Sparse>) -> Result<&'static
 fn parse_extra_sparses<'a>(i: &'a [u8], isextended: bool, sparses: &'a mut Vec<Sparse>) -> IResult<'a, &'a [u8], &'a mut Vec<Sparse>> {
     if isextended {
         chain!(i,
-            map_res!(count!(parse_one_sparse, Sparse, 21), apply!(add_to_vec, sparses)) ~
+            map_res!(apply!(parse_sparses_with_limit, 21), apply!(add_to_vec, sparses)) ~
             extended:      parse_bool                                                   ~
             take!(7) /* padding to 512 */                                               ~
             extra_sparses: apply!(parse_extra_sparses, extended, sparses),
@@ -227,30 +267,27 @@ named!(parse_bool<&[u8], bool>, map_res!(take!(1), to_bool));
  * UStar PAX extended parsing
  */
 
-fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
-    let sparses : Vec<Sparse> = Vec::new();
+fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader> {
     chain!(i,
-        atime:         parse_octal12 ~
-        ctime:         parse_octal12 ~
-        offset:        parse_octal12 ~
-        longnames:     parse_str4    ~
-        take!(1)                     ~
-        sparse:        parse_sparse  ~
-        isextended:    parse_bool    ~
-        realsize:      parse_octal12 ~
-        take!(17)                    ~ /* padding to 512 */
-        apply!(parse_extra_sparses, isextended, &mut sparses),
+        atime:       parse_octal12                       ~
+        ctime:       parse_octal12                       ~
+        offset:      parse_octal12                       ~
+        longnames:   parse_str4                          ~
+        take!(1)                                         ~
+        sparses:     apply!(parse_sparses_with_limit, 4) ~
+        isextended:  parse_bool                          ~
+        realsize:    parse_octal12                       ~
+        take!(17), /* padding to 512 */
         ||{
-            UStarExtraHeader::Pax(PaxHeader {
+            PaxHeader {
                 atime:         atime,
                 ctime:         ctime,
                 offset:        offset,
                 longnames:     longnames,
-                sparse:        sparse,
+                sparses:       sparses,
                 isextended:    isextended,
                 realsize:      realsize,
-                extra_sparses: sparses
-            })
+            }
         }
     )
 }
@@ -273,7 +310,15 @@ fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
 
 fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader> {
     match flag {
-        TypeFlag::PaxInterexchangeFormat => parse_ustar00_extra_pax(i),
+        TypeFlag::PaxInterexchangeFormat => {
+            chain!(i,
+                header: parse_ustar00_extra_pax ~
+                apply!(parse_extra_sparses, header.isextended, &mut header.sparses),
+                ||{
+                    UStarExtraHeader::Pax(header)
+                }
+            )
+        },
         _ => parse_ustar00_extra_posix(i)
     }
 }
