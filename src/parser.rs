@@ -241,7 +241,7 @@ fn add_to_vec(extra: Vec<Sparse>, sparses: &mut Vec<Sparse>) -> Result<&'static 
     Ok("")
 }
 
-fn parse_extra_sparses<'a>(i: &'a [u8], isextended: bool, sparses: &'a mut Vec<Sparse>) -> IResult<'a, &'a [u8], &'a mut Vec<Sparse>> {
+fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut Vec<Sparse>) -> IResult<'a, &'a [u8], &'b mut Vec<Sparse>> {
     if isextended {
         chain!(i,
             map_res!(apply!(parse_sparses_with_limit, 21), apply!(add_to_vec, sparses)) ~
@@ -255,6 +255,10 @@ fn parse_extra_sparses<'a>(i: &'a [u8], isextended: bool, sparses: &'a mut Vec<S
     } else {
         IResult::Done(i, sparses)
     }
+}
+
+fn parse_pax_extra_sparses<'a, 'b>(i: &'a [u8], h: &'b mut PaxHeader) -> IResult<'a, &'a [u8], &'b mut Vec<Sparse>> {
+    parse_extra_sparses(i, h.isextended, &mut h.sparses)
 }
 
 /*
@@ -313,11 +317,12 @@ fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
 }
 
 fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader> {
+    let mut header : PaxHeader;
     match flag {
         TypeFlag::PaxInterexchangeFormat => {
             chain!(i,
-                header: parse_ustar00_extra_pax ~
-                apply!(parse_extra_sparses, header.isextended, &mut header.sparses),
+                header = parse_ustar00_extra_pax ~
+                apply!(parse_pax_extra_sparses, &mut header),
                 ||{
                     UStarExtraHeader::Pax(header)
                 }
