@@ -9,8 +9,7 @@ use nom::*;
 #[derive(Debug,PartialEq,Eq)]
 pub struct TarEntry<'a> {
     pub header:   PosixHeader<'a>,
-/* FIXME: &[u8] */
-    pub contents: &'a str
+    pub contents: &'a [u8]
 }
 
 #[derive(Debug,PartialEq,Eq)]
@@ -408,14 +407,14 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
  * Contents parsing
  */
 
-fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &str> {
+fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &[u8]> {
     let trailing = size % 512;
     let padding = match trailing {
         0 => 0,
         t => 512 - t
     };
     chain!(i,
-        contents: take_str!(size as usize) ~
+        contents: take!(size as usize) ~
         take!(padding as usize),
         ||{
             contents
