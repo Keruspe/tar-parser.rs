@@ -317,11 +317,10 @@ fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
 }
 
 fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader> {
-    let mut header : PaxHeader;
     match flag {
         TypeFlag::PaxInterexchangeFormat => {
             chain!(i,
-                header = parse_ustar00_extra_pax ~
+                mut header: parse_ustar00_extra_pax ~
                 apply!(parse_pax_extra_sparses, &mut header),
                 ||{
                     UStarExtraHeader::Pax(header)
