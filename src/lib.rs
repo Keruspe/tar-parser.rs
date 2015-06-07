@@ -1,5 +1,3 @@
-/* for Vec.append */
-#![feature(collections)]
 #[macro_use]
 extern crate nom;
 
