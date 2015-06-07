@@ -112,7 +112,7 @@ named!(parse_str32<&[u8], &str>, take_str_eat_garbage!(32));
 named!(parse_str100<&[u8], &str>, take_str_eat_garbage!(100));
 named!(parse_str155<&[u8], &str>, take_str_eat_garbage!(155));
 
-macro_rules! take_until_expr_with_limit(
+macro_rules! take_until_expr_with_limit_consume(
   ($i:expr, $submac:ident!( $($args:tt)* ), $stop: expr, $limit: expr) => (
     {
       let mut begin = 0;
@@ -120,13 +120,17 @@ macro_rules! take_until_expr_with_limit(
       let mut res = Vec::new();
       let mut cnt = 0;
       let mut err = false;
+      let mut append = true;
       loop {
         match $submac!(&$i[begin..], $($args)*) {
           IResult::Done(i,o) => {
-            if $stop(o) {
-              break
+            if append {
+              if $stop(o) {
+                append = false;
+              } else {
+                res.push(o);
+              }
             }
-            res.push(o);
             begin += remaining - i.len();
             remaining = i.len();
             cnt = cnt + 1;
@@ -153,7 +157,7 @@ macro_rules! take_until_expr_with_limit(
     }
   );
   ($i:expr, $f:expr, $stop: expr, $limit: expr) => (
-    take_until_expr_with_limit!($i, call!($f), $stop, $limit);
+    take_until_expr_with_limit_consume!($i, call!($f), $stop, $limit);
   );
 );
 
@@ -227,7 +231,7 @@ fn parse_one_sparse(i: &[u8]) -> IResult<&[u8], Sparse> {
 }
 
 fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse>> {
-    take_until_expr_with_limit!(i, parse_one_sparse, |s: Sparse| s.offset == 0 && s.numbytes == 0, limit)
+    take_until_expr_with_limit_consume!(i, parse_one_sparse, |s: Sparse| s.offset == 0 && s.numbytes == 0, limit)
 }
 
 fn add_to_vec(extra: Vec<Sparse>, sparses: &mut Vec<Sparse>) -> Result<&'static str, &'static str> {
