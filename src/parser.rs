@@ -82,7 +82,7 @@ pub struct PaxHeader<'a> {
     pub realsize:   u64,
 }
 
-#[derive(Debug,PartialEq,Eq,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq)]
 pub struct Sparse {
     pub offset:   u64,
     pub numbytes: u64
@@ -126,7 +126,7 @@ macro_rules! take_until_expr_with_limit_consume(
         match $submac!(&$i[begin..], $($args)*) {
           IResult::Done(i,o) => {
             if append {
-              if $stop(o) {
+              if $stop(&o) {
                 append = false;
               } else {
                 res.push(o);
@@ -232,23 +232,21 @@ fn parse_one_sparse(i: &[u8]) -> IResult<&[u8], Sparse> {
 }
 
 fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse>> {
-    take_until_expr_with_limit_consume!(i, parse_one_sparse, |s: Sparse| s.offset == 0 && s.numbytes == 0, limit)
+    take_until_expr_with_limit_consume!(i, parse_one_sparse, |s: &Sparse| s.offset == 0 && s.numbytes == 0, limit)
 }
 
-fn add_to_vec(extra: Vec<Sparse>, sparses: &mut Vec<Sparse>) -> Result<&'static str, &'static str> {
-    for sparse in &extra {
-        sparses.push(*sparse);
-    }
-    Ok("")
+fn add_to_vec<'a, 'b>(sparses: &'a mut Vec<Sparse>, extra: &'b mut Vec<Sparse>) -> &'a mut Vec<Sparse> {
+    sparses.append(extra);
+    sparses
 }
 
 fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut Vec<Sparse>) -> IResult<'a, &'a [u8], &'b mut Vec<Sparse>> {
     if isextended {
         chain!(i,
-            map_res!(apply!(parse_sparses_with_limit, 21), apply!(add_to_vec, sparses)) ~
-            extended:      parse_bool                                                   ~
-            take!(7) /* padding to 512 */                                               ~
-            extra_sparses: apply!(parse_extra_sparses, extended, sparses),
+            mut sps: apply!(parse_sparses_with_limit, 21) ~
+            extended:      parse_bool                     ~
+            take!(7) /* padding to 512 */                 ~
+            extra_sparses: apply!(parse_extra_sparses, extended, add_to_vec(sparses, &mut sps)),
             ||{
                 extra_sparses
             }
