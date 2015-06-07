@@ -9,6 +9,7 @@ use nom::*;
 #[derive(Debug,PartialEq,Eq)]
 pub struct TarEntry<'a> {
     pub header:   PosixHeader<'a>,
+/* FIXME: &[u8] */
     pub contents: &'a str
 }
 
@@ -26,8 +27,8 @@ pub struct PosixHeader<'a> {
     pub ustar:    ExtraHeader<'a>
 }
 
-/* TODO: support vendor specific + sparse */
-#[derive(Debug,PartialEq,Eq,Clone,Copy)]
+/* TODO: support vendor specific */
+#[derive(Debug,PartialEq,Eq)]
 pub enum TypeFlag {
     NormalFile,
     HardLink,
@@ -316,8 +317,8 @@ fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
     )
 }
 
-fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader> {
-    match flag {
+fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<'a, &'a [u8], UStarExtraHeader<'a>> {
+    match *flag {
         TypeFlag::PaxInterexchangeFormat => {
             chain!(i,
                 mut header: parse_ustar00_extra_pax ~
@@ -331,7 +332,7 @@ fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHea
     }
 }
 
-fn parse_ustar00(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader> {
+fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<'a, &'a [u8], ExtraHeader<'a>> {
     chain!(i,
         tag!("00")             ~
         uname:    parse_str32  ~
@@ -353,7 +354,7 @@ fn parse_ustar00(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader> {
     )
 }
 
-fn parse_ustar(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader> {
+fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<'a, &'a [u8], ExtraHeader<'a>> {
     chain!(i,
         tag!("ustar\0") ~
         ustar: apply!(parse_ustar00, flag),
@@ -387,7 +388,7 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
         chksum:   parse_str8      ~
         typeflag: parse_type_flag ~
         linkname: parse_str100    ~
-        ustar:    alt!(apply!(parse_ustar, typeflag) | parse_posix),
+        ustar:    alt!(apply!(parse_ustar, &typeflag) | parse_posix),
         ||{
             PosixHeader {
                 name:     name,
