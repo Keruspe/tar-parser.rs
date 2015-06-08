@@ -207,11 +207,11 @@ fn char_to_type_flag(c: char) -> TypeFlag {
     }
 }
 
-fn bytes_to_type_flag(i: &[u8]) -> Result<TypeFlag, &'static str> {
-    Ok(char_to_type_flag(i[0] as char))
+fn bytes_to_type_flag(i: &[u8]) -> TypeFlag {
+    char_to_type_flag(i[0] as char)
 }
 
-named!(parse_type_flag<&[u8], TypeFlag>, map_res!(take!(1), bytes_to_type_flag));
+named!(parse_type_flag<&[u8], TypeFlag>, map!(take!(1), bytes_to_type_flag));
 
 /*
  * Sparse parsing
@@ -265,11 +265,11 @@ fn parse_pax_extra_sparses<'a, 'b>(i: &'a [u8], h: &'b mut PaxHeader) -> IResult
  * Boolean parsing
  */
 
-fn to_bool(i: &[u8]) -> Result<bool, &'static str> {
-    Ok(i[0] != 0)
+fn to_bool(i: &[u8]) -> bool {
+    i[0] != 0
 }
 
-named!(parse_bool<&[u8], bool>, map_res!(take!(1), to_bool));
+named!(parse_bool<&[u8], bool>, map!(take!(1), to_bool));
 
 /*
  * UStar PAX extended parsing
@@ -445,14 +445,14 @@ fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
  * Tar archive parsing
  */
 
-fn filter_entries(entries: Vec<TarEntry>) -> Result<Vec<TarEntry>, &'static str> {
+fn filter_entries(entries: Vec<TarEntry>) -> Vec<TarEntry> {
     /* Filter out empty entries */
-    Ok(entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry>>())
+    entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry>>()
 }
 
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
     chain!(i,
-        entries: map_res!(many0!(parse_entry), filter_entries) ~
+        entries: map!(many0!(parse_entry), filter_entries) ~
         eof,
         ||{
             entries
