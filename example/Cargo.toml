@@ -3,8 +3,8 @@ name    = "tar-example"
 version = "0.0.1"
 authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 
-[dependencies.nom]
-git = "git://github.com/Keruspe/nom"
+[dependencies]
+nom = "~0.3.4"
 
 [dependencies.tar-parser]
 path = ".."
