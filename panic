@@ -1,0 +1,46 @@
+keruspe@Lou ~/Projects/tar-parser.rs (git)-[master] % RUST_BACKTRACE=1 cargo build                                                                                                                [0][17:21:39 - 07/06/2015]
+   Compiling tar-parser v0.0.1 (file:///home/keruspe/Projects/tar-parser.rs)
+src/parser.rs:336:12: 9:30 error: cannot infer an appropriate lifetime for lifetime parameter 'a in function call due to conflicting requirements
+error: internal compiler error: unexpected panic
+note: the compiler unexpectedly panicked. this is a bug.
+note: we would appreciate a bug report: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#bug-reports
+note: run with `RUST_BACKTRACE=1` for a backtrace
+thread 'rustc' panicked at 'capacity overflow', /var/tmp/paludis/build/dev-lang-rust-1.0.0-r1/work/rustc-1.0.0/src/libcore/option.rs:330
+
+stack backtrace:
+   1:     0x7f2fab9b14b9 - sys::backtrace::write::h164086ef5a607bafd4r
+   2:     0x7f2fab9b9006 - panicking::on_panic::ha94d18078cc5af97jrw
+   3:     0x7f2fab97c4c2 - rt::unwind::begin_unwind_inner::h49326434cabad82ct6v
+   4:     0x7f2fab97d16c - rt::unwind::begin_unwind_fmt::h5a97186136d341ee74v
+   5:     0x7f2fab9b8be6 - rust_begin_unwind
+   6:     0x7f2fab9f9b44 - panicking::panic_fmt::hc9b86aa3594e2c0awwy
+   7:     0x7f2fa8f288ef - codemap::CodeMap::span_to_lines::hc42c0c718f04bf5boiA
+   8:     0x7f2fa8f6d847 - diagnostic::emit::h2a7e5f91769af184mTB
+   9:     0x7f2fa8f6b684 - diagnostic::EmitterWriter.Emitter::emit::hd327cfbcead190094PB
+  10:     0x7f2fa8f1f071 - diagnostic::SpanHandler::span_err::hf07370c54adcb961amB
+  11:     0x7f2fa99614cd - session::Session::span_err::hc3c0c4a5b22c4986axq
+  12:     0x7f2fa9a09125 - middle::infer::error_reporting::InferCtxt<'a, 'tcx>.ErrorReportingHelpers<'tcx>::report_inference_failure::h5cf983000f2bd1d67Vr
+  13:     0x7f2fa9a01399 - middle::infer::error_reporting::InferCtxt<'a, 'tcx>.ErrorReporting<'tcx>::report_processed_errors::he3fcb77d699a0e430hr
+  14:     0x7f2fa99fae24 - middle::infer::error_reporting::InferCtxt<'a, 'tcx>.ErrorReporting<'tcx>::report_region_errors::h174cbf2d7a2d935fRyq
+  15:     0x7f2fa9a5af09 - middle::infer::InferCtxt<'a, 'tcx>::resolve_regions_and_report_errors::h973134355b643d9d9Bz
+  16:     0x7f2faa822a30 - check::check_bare_fn::hb517bed254e53efetwn
+  17:     0x7f2faa820822 - check::CheckItemBodiesVisitor<'a, 'tcx>.Visitor<'tcx>::visit_item::h7e1083dbbcd5bf85wtn
+  18:     0x7f2faa820a0f - check::CheckItemBodiesVisitor<'a, 'tcx>.Visitor<'tcx>::visit_item::h7e1083dbbcd5bf85wtn
+  19:     0x7f2faa8e474a - check_crate::closure.38028
+  20:     0x7f2faa8dfae0 - check_crate::hf91a9ef4aac6977cXcC
+  21:     0x7f2fabee8d98 - driver::phase_3_run_analysis_passes::h8cc962c1758f1f13nGa
+  22:     0x7f2fabec9e95 - driver::compile_input::h42259b3fa1524949Qba
+  23:     0x7f2fabf8b341 - run_compiler::h3f490bb3522d6421z4b
+  24:     0x7f2fabf88f92 - boxed::F.FnBox<A>::call_box::h8476088489084622563
+  25:     0x7f2fabf884c9 - rt::unwind::try::try_fn::h765645867915667984
+  26:     0x7f2faba1e4b8 - rust_try_inner
+  27:     0x7f2faba1e4a5 - rust_try
+  28:     0x7f2fabf88778 - boxed::F.FnBox<A>::call_box::h13352498324446635514
+  29:     0x7f2fab9b7ef1 - sys::thread::create::thread_start::hcce4269c13fcd3f6aqv
+  30:     0x7f2fa5d742c3 - <unknown>
+  31:     0x7f2fab612b1c - clone
+  32:                0x0 - <unknown>
+
+Could not compile `tar-parser`.
+
+To learn more, run the command again with --verbose.
