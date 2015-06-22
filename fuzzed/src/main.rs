@@ -18,12 +18,12 @@ fn main() {
     match parse_tar(tar) {
         IResult::Done(_, entries) => {
             for e in entries.iter() {
-                println!("{:?}", e);
+                //println!("{:?}", e);
             }
         }
         e  => {
-            println!("error or incomplete: {:?}", e);
-            panic!("cannot parse tar archive");
+            //println!("error or incomplete: {:?}", e);
+            //panic!("cannot parse tar archive");
         }
     }
 }
