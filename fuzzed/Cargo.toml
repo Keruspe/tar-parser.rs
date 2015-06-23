@@ -1,0 +1,16 @@
+[package]
+name    = "tar-example"
+version = "0.1.0"
+authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
+
+[dependencies]
+nom = "~0.3.4"
+
+[dependencies.tar-parser]
+path = ".."
+
+[dependencies.afl-coverage-plugin]
+git = "https://github.com/kmcallister/afl.rs"
+
+[dependencies.afl-coverage]
+git = "https://github.com/kmcallister/afl.rs"
