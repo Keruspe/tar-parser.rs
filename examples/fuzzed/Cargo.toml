@@ -7,7 +7,7 @@ authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 nom = "~0.3.7"
 
 [dependencies.tar-parser]
-path = ".."
+path = "../.."
 
 [dependencies.afl-coverage-plugin]
 git = "https://github.com/kmcallister/afl.rs"
