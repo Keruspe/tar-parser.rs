@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 
 [dependencies]
-nom = "~0.3.7"
+nom = "~0.3.11"
 
 [dependencies.tar-parser]
 path = "../.."
