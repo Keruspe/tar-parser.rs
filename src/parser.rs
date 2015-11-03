@@ -149,7 +149,7 @@ macro_rules! take_until_expr_with_limit_consume(
         }
       }
       if err {
-        IResult::Error(Err::Position(ErrorCode::Count as u32,$i))
+        IResult::Error(Err::Position(ErrorKind::TakeUntil,$i))
       } else if cnt == $limit {
         IResult::Done(&$i[begin..], res)
       } else {
@@ -242,7 +242,7 @@ fn add_to_vec<'a, 'b>(sparses: &'a mut Vec<Sparse>, extra: &'b mut Vec<Sparse>) 
     sparses
 }
 
-fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut Vec<Sparse>) -> IResult<'a, &'a [u8], &'b mut Vec<Sparse>> {
+fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut Vec<Sparse>) -> IResult<&'a [u8], &'b mut Vec<Sparse>> {
     if isextended {
         chain!(i,
             mut sps: apply!(parse_sparses_with_limit, 21) ~
@@ -258,7 +258,7 @@ fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut V
     }
 }
 
-fn parse_pax_extra_sparses<'a, 'b>(i: &'a [u8], h: &'b mut PaxHeader) -> IResult<'a, &'a [u8], &'b mut Vec<Sparse>> {
+fn parse_pax_extra_sparses<'a, 'b>(i: &'a [u8], h: &'b mut PaxHeader) -> IResult<&'a [u8], &'b mut Vec<Sparse>> {
     parse_extra_sparses(i, h.isextended, &mut h.sparses)
 }
 
@@ -317,7 +317,7 @@ fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
     )
 }
 
-fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<'a, &'a [u8], UStarExtraHeader<'a>> {
+fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], UStarExtraHeader<'a>> {
     match *flag {
         TypeFlag::PaxInterexchangeFormat => {
             chain!(i,
@@ -332,7 +332,7 @@ fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<'a, &
     }
 }
 
-fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<'a, &'a [u8], ExtraHeader<'a>> {
+fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], ExtraHeader<'a>> {
     chain!(i,
         tag!("00")             ~
         uname:    parse_str32  ~
@@ -354,7 +354,7 @@ fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<'a, &'a [u8
     )
 }
 
-fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<'a, &'a [u8], ExtraHeader<'a>> {
+fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], ExtraHeader<'a>> {
     chain!(i,
         tag!("ustar\0") ~
         ustar: apply!(parse_ustar00, flag),
