@@ -1,6 +1,6 @@
 [package]
 name    = "tar-example"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 
 [dependencies]
