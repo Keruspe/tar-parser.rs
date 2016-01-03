@@ -12,4 +12,4 @@ license     = "MIT"
 name="tar"
 
 [dependencies]
-nom = "~1.0.0"
+nom = "^1.1.0"
