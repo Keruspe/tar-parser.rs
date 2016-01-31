@@ -5,12 +5,8 @@ authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 
 [dependencies]
 nom = "^1.1.0"
+afl = "^0.1.1"
+afl-plugin = "^0.1.1"
 
 [dependencies.tar-parser]
 path = "../.."
-
-[dependencies.afl-plugin]
-git = "https://github.com/frewsxcv/afl.rs"
-
-[dependencies.afl]
-git = "https://github.com/frewsxcv/afl.rs"
