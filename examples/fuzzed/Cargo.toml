@@ -9,8 +9,8 @@ nom = "^1.1.0"
 [dependencies.tar-parser]
 path = "../.."
 
-[dependencies.afl-coverage-plugin]
-git = "https://github.com/kmcallister/afl.rs"
+[dependencies.afl-plugin]
+git = "https://github.com/frewsxcv/afl.rs"
 
-[dependencies.afl-coverage]
-git = "https://github.com/kmcallister/afl.rs"
+[dependencies.afl]
+git = "https://github.com/frewsxcv/afl.rs"
