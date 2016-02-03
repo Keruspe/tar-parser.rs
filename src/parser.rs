@@ -334,13 +334,7 @@ fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], E
 }
 
 fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], ExtraHeader<'a>> {
-    chain!(i,
-        tag!("ustar\0") ~
-        ustar: apply!(parse_ustar00, flag),
-        ||{
-            ustar
-        }
-    )
+    map!(i, pair!(tag!("ustar\0"), apply!(parse_ustar00, flag)), |(_, ustar)| ustar)
 }
 
 /*
