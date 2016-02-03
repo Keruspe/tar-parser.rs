@@ -265,30 +265,28 @@ named!(parse_bool<&[u8], bool>, map!(take!(1), to_bool));
  * UStar PAX extended parsing
  */
 
-fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader> {
-    chain!(i,
-        atime:       parse_octal12                       ~
-        ctime:       parse_octal12                       ~
-        offset:      parse_octal12                       ~
-        longnames:   parse_str4                          ~
-        take!(1)                                         ~
-        sparses:     apply!(parse_sparses_with_limit, 4) ~
-        isextended:  parse_bool                          ~
-        realsize:    parse_octal12                       ~
-        take!(17), /* padding to 512 */
-        ||{
-            PaxHeader {
-                atime:         atime,
-                ctime:         ctime,
-                offset:        offset,
-                longnames:     longnames,
-                sparses:       sparses,
-                isextended:    isextended,
-                realsize:      realsize,
-            }
+named!(parse_ustar00_extra_pax<&[u8], PaxHeader>, chain!(
+    atime:       parse_octal12                       ~
+    ctime:       parse_octal12                       ~
+    offset:      parse_octal12                       ~
+    longnames:   parse_str4                          ~
+    take!(1)                                         ~
+    sparses:     apply!(parse_sparses_with_limit, 4) ~
+    isextended:  parse_bool                          ~
+    realsize:    parse_octal12                       ~
+    take!(17), /* padding to 512 */
+    ||{
+        PaxHeader {
+            atime:         atime,
+            ctime:         ctime,
+            offset:        offset,
+            longnames:     longnames,
+            sparses:       sparses,
+            isextended:    isextended,
+            realsize:      realsize,
         }
-    )
-}
+    }
+));
 
 /*
  * UStar Posix parsing
@@ -341,38 +339,34 @@ fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], Ext
  * Posix tar archive header parsing
  */
 
-fn parse_posix(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
-    map!(i, take!(255), |_| ExtraHeader::Padding) /* padding to 512 */
-}
+named!(parse_posix<&[u8], ExtraHeader>, map!(take!(255), |_| ExtraHeader::Padding)); /* padding to 512 */
 
-fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
-    chain!(i,
-        name:     parse_str100    ~
-        mode:     parse_str8      ~
-        uid:      parse_octal8    ~
-        gid:      parse_octal8    ~
-        size:     parse_octal12   ~
-        mtime:    parse_octal12   ~
-        chksum:   parse_str8      ~
-        typeflag: parse_type_flag ~
-        linkname: parse_str100    ~
-        ustar:    alt!(apply!(parse_ustar, &typeflag) | parse_posix),
-        ||{
-            PosixHeader {
-                name:     name,
-                mode:     mode,
-                uid:      uid,
-                gid:      gid,
-                size:     size,
-                mtime:    mtime,
-                chksum:   chksum,
-                typeflag: typeflag,
-                linkname: linkname,
-                ustar:    ustar
-            }
+named!(parse_header<&[u8], PosixHeader>, chain!(
+    name:     parse_str100    ~
+    mode:     parse_str8      ~
+    uid:      parse_octal8    ~
+    gid:      parse_octal8    ~
+    size:     parse_octal12   ~
+    mtime:    parse_octal12   ~
+    chksum:   parse_str8      ~
+    typeflag: parse_type_flag ~
+    linkname: parse_str100    ~
+    ustar:    alt!(apply!(parse_ustar, &typeflag) | parse_posix),
+    ||{
+        PosixHeader {
+            name:     name,
+            mode:     mode,
+            uid:      uid,
+            gid:      gid,
+            size:     size,
+            mtime:    mtime,
+            chksum:   chksum,
+            typeflag: typeflag,
+            linkname: linkname,
+            ustar:    ustar
         }
-    )
-}
+    }
+));
 
 /*
  * Contents parsing
@@ -391,18 +385,16 @@ fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &[u8]> {
  * Tar entry header + contents parsing
  */
 
-fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry> {
-    chain!(i,
-        header:   parse_header ~
-        contents: apply!(parse_contents, header.size),
-        ||{
-            TarEntry {
-                header: header,
-                contents: contents
-            }
+named!(parse_entry<&[u8], TarEntry>, chain!(
+    header:   parse_header ~
+    contents: apply!(parse_contents, header.size),
+    ||{
+        TarEntry {
+            header: header,
+            contents: contents
         }
-    )
-}
+    }
+));
 
 /*
  * Tar archive parsing
