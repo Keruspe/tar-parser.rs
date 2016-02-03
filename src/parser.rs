@@ -414,13 +414,7 @@ fn filter_entries(entries: Vec<TarEntry>) -> Vec<TarEntry> {
 }
 
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
-    chain!(i,
-        entries: map!(many0!(parse_entry), filter_entries) ~
-        eof,
-        ||{
-            entries
-        }
-    )
+    map!(i, pair!(map!(many0!(parse_entry), filter_entries), eof), |(entries, _)| entries)
 }
 
 /*
