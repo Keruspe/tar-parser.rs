@@ -218,18 +218,7 @@ named!(parse_type_flag<&[u8], TypeFlag>, map!(take!(1), bytes_to_type_flag));
  * Sparse parsing
  */
 
-fn parse_one_sparse(i: &[u8]) -> IResult<&[u8], Sparse> {
-    chain!(i,
-        offset:   parse_octal12 ~
-        numbytes: parse_octal12,
-        ||{
-            Sparse {
-                offset:   offset,
-                numbytes: numbytes
-            }
-        }
-    )
-}
+named!(parse_one_sparse<&[u8], Sparse>, map!(pair!(parse_octal12, parse_octal12), |(offset, numbytes)| Sparse { offset: offset, numbytes: numbytes }));
 
 fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse>> {
     take_until_expr_with_limit_consume!(i, parse_one_sparse, |s: &Sparse| s.offset == 0 && s.numbytes == 0, limit)
