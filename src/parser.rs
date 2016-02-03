@@ -348,12 +348,7 @@ fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], Ext
  */
 
 fn parse_posix(i: &[u8]) -> IResult<&[u8], ExtraHeader> {
-    chain!(i,
-        take!(255), /* padding to 512 */
-        ||{
-            ExtraHeader::Padding
-        }
-    )
+    map!(i, take!(255), |_| ExtraHeader::Padding) /* padding to 512 */
 }
 
 fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
