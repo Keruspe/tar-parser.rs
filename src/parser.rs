@@ -294,17 +294,7 @@ fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader> {
  * UStar Posix parsing
  */
 
-fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader> {
-    chain!(i,
-        prefix: parse_str155 ~
-        take!(12),
-        ||{
-            UStarExtraHeader::PosixUStar(PosixUStarHeader {
-                prefix: prefix
-            })
-        }
-    )
-}
+named!(parse_ustar00_extra_posix<&[u8], UStarExtraHeader>, map!(pair!(parse_str155, take!(12)), |(prefix, _)| UStarExtraHeader::PosixUStar(PosixUStarHeader { prefix: prefix })));
 
 fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], UStarExtraHeader<'a>> {
     match *flag {
