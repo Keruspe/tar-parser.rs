@@ -234,7 +234,7 @@ fn add_to_vec<'a, 'b>(sparses: &'a mut Vec<Sparse>, extra: &'b mut Vec<Sparse>) 
 fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut Vec<Sparse>) -> IResult<&'a [u8], &'b mut Vec<Sparse>> {
     if isextended {
         chain!(i,
-            mut sps: apply!(parse_sparses_with_limit, 21) ~
+            mut sps:       apply!(parse_sparses_with_limit, 21) ~
             extended:      parse_bool                     ~
             take!(7) /* padding to 512 */                 ~
             extra_sparses: apply!(parse_extra_sparses, extended, add_to_vec(sparses, &mut sps)),
@@ -384,13 +384,7 @@ fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &[u8]> {
         0 => 0,
         t => 512 - t
     };
-    chain!(i,
-        contents: take!(size as usize) ~
-        take!(padding as usize),
-        ||{
-            contents
-        }
-    )
+    map!(i, pair!(take!(size as usize), take!(padding as usize)), |(contents, _)| contents)
 }
 
 /*
