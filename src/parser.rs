@@ -26,7 +26,7 @@ pub struct PosixHeader<'a> {
     pub ustar:    ExtraHeader<'a>
 }
 
-/* TODO: support vendor specific */
+/* TODO: support more vendor specific */
 #[derive(Debug,PartialEq,Eq)]
 pub enum TypeFlag {
     NormalFile,
@@ -39,6 +39,7 @@ pub enum TypeFlag {
     ContiguousFile,
     PaxInterexchangeFormat,
     PaxExtendedAttributes,
+    GNULongName,
     VendorSpecific
 }
 
@@ -62,12 +63,18 @@ pub struct UStarHeader<'a> {
 #[derive(Debug,PartialEq,Eq)]
 pub enum UStarExtraHeader<'a> {
     PosixUStar(PosixUStarHeader<'a>),
+    GNULongName(GNULongNameHeader<'a>),
     Pax(PaxHeader<'a>)
 }
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct PosixUStarHeader<'a> {
     pub prefix: &'a str
+}
+
+#[derive(Debug,PartialEq,Eq)]
+pub struct GNULongNameHeader<'a> {
+    pub name: &'a str
 }
 
 #[derive(Debug,PartialEq,Eq)]
@@ -112,6 +119,7 @@ named!(parse_str8<&[u8], &str>, take_str_eat_garbage!(8));
 named!(parse_str32<&[u8], &str>, take_str_eat_garbage!(32));
 named!(parse_str100<&[u8], &str>, take_str_eat_garbage!(100));
 named!(parse_str155<&[u8], &str>, take_str_eat_garbage!(155));
+named!(parse_str512<&[u8], &str>, take_str_eat_garbage!(512));
 
 macro_rules! take_until_expr_with_limit_consume(
   ($i:expr, $submac:ident!( $($args:tt)* ), $stop: expr, $limit: expr) => (
@@ -203,6 +211,7 @@ fn char_to_type_flag(c: char) -> TypeFlag {
         '7' => TypeFlag::ContiguousFile,
         'g' => TypeFlag::PaxInterexchangeFormat,
         'x' => TypeFlag::PaxExtendedAttributes,
+        'L' => TypeFlag::GNULongName,
         'A' ... 'Z' => TypeFlag::VendorSpecific,
         _ => TypeFlag::NormalFile
     }
@@ -341,32 +350,65 @@ fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], Ext
 
 named!(parse_posix<&[u8], ExtraHeader>, map!(take!(255), |_| ExtraHeader::Padding)); /* padding to 512 */
 
-named!(parse_header<&[u8], PosixHeader>, chain!(
-    name:     parse_str100    ~
-    mode:     parse_str8      ~
-    uid:      parse_octal8    ~
-    gid:      parse_octal8    ~
-    size:     parse_octal12   ~
-    mtime:    parse_octal12   ~
-    chksum:   parse_str8      ~
-    typeflag: parse_type_flag ~
-    linkname: parse_str100    ~
-    ustar:    alt!(apply!(parse_ustar, &typeflag) | parse_posix),
-    ||{
-        PosixHeader {
-            name:     name,
-            mode:     mode,
-            uid:      uid,
-            gid:      gid,
-            size:     size,
-            mtime:    mtime,
-            chksum:   chksum,
-            typeflag: typeflag,
-            linkname: linkname,
-            ustar:    ustar
+fn parse_header<'a>(i: &'a [u8]) -> IResult<&'a [u8], PosixHeader<'a>> {
+    let mut err_res = None;
+    let res = chain!(i,
+        name:     parse_str100    ~
+        mode:     parse_str8      ~
+        uid:      parse_octal8    ~
+        gid:      parse_octal8    ~
+        size:     parse_octal12   ~
+        mtime:    parse_octal12   ~
+        chksum:   parse_str8      ~
+        typeflag: parse_type_flag ~
+        linkname: parse_str100    ~
+        ustar:    alt!(apply!(parse_ustar, &typeflag) | parse_posix),
+        ||{
+            let real_name = match typeflag {
+                TypeFlag::GNULongName => {
+                    let name_res = parse_str512(&i[512..]);
+                    match name_res {
+                        IResult::Done(_, long_name) => long_name,
+                        IResult::Error(e) => {
+                            err_res = Some(IResult::Error(e));
+                            name
+                        },
+                        IResult::Incomplete(i) => {
+                            err_res = Some(IResult::Incomplete(i));
+                            name
+                        }
+                    }
+                },
+                _ => name
+            };
+
+            PosixHeader {
+                name:     real_name,
+                mode:     mode,
+                uid:      uid,
+                gid:      gid,
+                size:     size,
+                mtime:    mtime,
+                chksum:   chksum,
+                typeflag: typeflag,
+                linkname: linkname,
+                ustar:    ustar
+            }
         }
-    }
-));
+    );
+
+    err_res.unwrap_or(
+        if let IResult::Done(i, h) = res {
+            if h.typeflag == TypeFlag::GNULongName {
+                IResult::Done(&i[512..], h)
+            } else {
+                IResult::Done(i, h)
+            }
+        } else {
+            res
+        }
+    )
+}
 
 /*
  * Contents parsing
