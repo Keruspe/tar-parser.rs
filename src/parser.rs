@@ -234,7 +234,7 @@ fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse
 }
 
 fn add_to_vec<'a, 'b>(sparses: &'a mut Vec<Sparse>, extra: &'b mut Vec<Sparse>) -> &'a mut Vec<Sparse> {
-    while sparses.len() != 0 {
+    while extra.len() != 0 {
       extra.pop().map(|s| sparses.push(s));
     }
     sparses
