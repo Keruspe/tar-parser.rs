@@ -233,20 +233,18 @@ fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse
     take_until_expr_with_limit_consume!(i, parse_one_sparse, |s: &Sparse| s.offset == 0 && s.numbytes == 0, limit)
 }
 
-fn add_to_vec<'a, 'b>(sparses: &'a mut Vec<Sparse>, extra: &'b mut Vec<Sparse>) -> &'a mut Vec<Sparse> {
-    while extra.len() != 0 {
-      extra.pop().map(|s| sparses.push(s));
-    }
+fn add_to_vec<'a, 'b>(sparses: &'a mut Vec<Sparse>, extra: Vec<Sparse>) -> &'a mut Vec<Sparse> {
+    sparses.extend(extra);
     sparses
 }
 
 fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut Vec<Sparse>) -> IResult<&'a [u8], &'b mut Vec<Sparse>> {
     if isextended {
         chain!(i,
-            mut sps:       apply!(parse_sparses_with_limit, 21) ~
-            extended:      parse_bool                     ~
-            take!(7) /* padding to 512 */                 ~
-            extra_sparses: apply!(parse_extra_sparses, extended, add_to_vec(sparses, &mut sps)),
+            sps:           apply!(parse_sparses_with_limit, 21) ~
+            extended:      parse_bool                           ~
+            take!(7) /* padding to 512 */                       ~
+            extra_sparses: apply!(parse_extra_sparses, extended, add_to_vec(sparses, sps)),
             ||{
                 extra_sparses
             }
