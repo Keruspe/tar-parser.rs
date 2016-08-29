@@ -310,14 +310,8 @@ fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [
 }
 
 fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], ExtraHeader<'a>> {
-    chain!(i,
-        tag!("00")             ~
-        uname:    parse_str32  ~
-        gname:    parse_str32  ~
-        devmajor: parse_octal8 ~
-        devminor: parse_octal8 ~
-        extra:    apply!(parse_ustar00_extra, flag),
-        ||{
+    map!(i, tuple!(tag!("00"), parse_str32, parse_str32, parse_octal8, parse_octal8, apply!(parse_ustar00_extra, flag)),
+        |(_, uname, gname, devmajor, devminor, extra)|{
             ExtraHeader::UStar(UStarHeader {
                 magic:    "ustar\0",
                 version:  "00",
