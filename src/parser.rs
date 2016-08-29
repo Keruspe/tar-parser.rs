@@ -274,17 +274,8 @@ named!(parse_bool<&[u8], bool>, map!(take!(1), to_bool));
  * UStar PAX extended parsing
  */
 
-named!(parse_ustar00_extra_pax<&[u8], PaxHeader>, chain!(
-    atime:       parse_octal12                       ~
-    ctime:       parse_octal12                       ~
-    offset:      parse_octal12                       ~
-    longnames:   parse_str4                          ~
-    take!(1)                                         ~
-    sparses:     apply!(parse_sparses_with_limit, 4) ~
-    isextended:  parse_bool                          ~
-    realsize:    parse_octal12                       ~
-    take!(17), /* padding to 512 */
-    ||{
+named!(parse_ustar00_extra_pax<&[u8], PaxHeader>, map!(tuple!(parse_octal12, parse_octal12, parse_octal12, parse_str4, take!(1), apply!(parse_sparses_with_limit, 4), parse_bool, parse_octal12, take!(17) /* padding to 512 */),
+    |(atime, ctime, offset, longnames, _, sparses, isextended, realsize, _)|{
         PaxHeader {
             atime:         atime,
             ctime:         ctime,
