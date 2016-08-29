@@ -254,10 +254,6 @@ fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut V
     }
 }
 
-fn parse_pax_extra_sparses<'a, 'b>(i: &'a [u8], h: &'b mut PaxHeader) -> IResult<&'a [u8], &'b mut Vec<Sparse>> {
-    parse_extra_sparses(i, h.isextended, &mut h.sparses)
-}
-
 /*
  * Boolean parsing
  */
@@ -272,19 +268,33 @@ named!(parse_bool<&[u8], bool>, map!(take!(1), to_bool));
  * UStar PAX extended parsing
  */
 
-named!(parse_ustar00_extra_pax<&[u8], PaxHeader>, map!(tuple!(parse_octal12, parse_octal12, parse_octal12, parse_str4, take!(1), apply!(parse_sparses_with_limit, 4), parse_bool, parse_octal12, take!(17) /* padding to 512 */),
-    |(atime, ctime, offset, longnames, _, sparses, isextended, realsize, _)|{
-        PaxHeader {
-            atime:         atime,
-            ctime:         ctime,
-            offset:        offset,
-            longnames:     longnames,
-            sparses:       sparses,
-            isextended:    isextended,
-            realsize:      realsize,
+fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader> {
+    let mut sparses = Vec::new();
+
+    chain!(i,
+        atime: parse_octal12 ~
+        ctime: parse_octal12 ~
+        offset: parse_octal12 ~
+        longnames: parse_str4 ~
+        take!(1) ~
+        sps: apply!(parse_sparses_with_limit, 4) ~
+        isextended: parse_bool ~
+        realsize: parse_octal12 ~
+        take!(17) ~ /* padding to 512 */
+        apply!(parse_extra_sparses, isextended, add_to_vec(&mut sparses, sps)),
+        ||{
+            PaxHeader {
+                atime:         atime,
+                ctime:         ctime,
+                offset:        offset,
+                longnames:     longnames,
+                sparses:       sparses,
+                isextended:    isextended,
+                realsize:      realsize,
+            }
         }
-    }
-));
+    )
+}
 
 /*
  * UStar Posix parsing
@@ -294,16 +304,8 @@ named!(parse_ustar00_extra_posix<&[u8], UStarExtraHeader>, map!(pair!(parse_str1
 
 fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], UStarExtraHeader<'a>> {
     match *flag {
-        TypeFlag::PaxInterexchangeFormat => {
-            chain!(i,
-                mut header: parse_ustar00_extra_pax ~
-                apply!(parse_pax_extra_sparses, &mut header),
-                ||{
-                    UStarExtraHeader::Pax(header)
-                }
-            )
-        },
-        _ => parse_ustar00_extra_posix(i)
+        TypeFlag::PaxInterexchangeFormat => map!(i, parse_ustar00_extra_pax, |header|{ UStarExtraHeader::Pax(header) }),
+        _                                => parse_ustar00_extra_posix(i)
     }
 }
 
