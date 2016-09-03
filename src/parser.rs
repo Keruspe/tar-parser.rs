@@ -334,64 +334,38 @@ fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], Ext
 
 named!(parse_posix<&[u8], ExtraHeader>, map!(take!(255), |_| ExtraHeader::Padding)); /* padding to 512 */
 
-/* TODO: port to do_parse! */
+fn parse_maybe_longname<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], &'a str> {
+    match flag {
+         &TypeFlag::GNULongName => parse_str512(i),
+         _                      => IResult::Error(error_code!(ErrorKind::Complete))
+    }
+}
+
 fn parse_header<'a>(i: &'a [u8]) -> IResult<&'a [u8], PosixHeader<'a>> {
-    let mut err_res = None;
-    let res = chain!(i,
-        name:     parse_str100    ~
-        mode:     parse_str8      ~
-        uid:      parse_octal8    ~
-        gid:      parse_octal8    ~
-        size:     parse_octal12   ~
-        mtime:    parse_octal12   ~
-        chksum:   parse_str8      ~
-        typeflag: parse_type_flag ~
-        linkname: parse_str100    ~
-        ustar:    alt!(apply!(parse_ustar, &typeflag) | parse_posix),
-        ||{
-            let real_name = match typeflag {
-                TypeFlag::GNULongName => {
-                    let name_res = parse_str512(&i[512..]);
-                    match name_res {
-                        IResult::Done(_, long_name) => long_name,
-                        IResult::Error(e) => {
-                            err_res = Some(IResult::Error(e));
-                            name
-                        },
-                        IResult::Incomplete(i) => {
-                            err_res = Some(IResult::Incomplete(i));
-                            name
-                        }
-                    }
-                },
-                _ => name
-            };
-
-            PosixHeader {
-                name:     real_name,
-                mode:     mode,
-                uid:      uid,
-                gid:      gid,
-                size:     size,
-                mtime:    mtime,
-                chksum:   chksum,
-                typeflag: typeflag,
-                linkname: linkname,
-                ustar:    ustar
-            }
-        }
-    );
-
-    err_res.unwrap_or(
-        if let IResult::Done(i, h) = res {
-            if h.typeflag == TypeFlag::GNULongName {
-                IResult::Done(&i[512..], h)
-            } else {
-                IResult::Done(i, h)
-            }
-        } else {
-            res
-        }
+    do_parse!(i,
+        name:     parse_str100                                       >>
+        mode:     parse_str8                                         >>
+        uid:      parse_octal8                                       >>
+        gid:      parse_octal8                                       >>
+        size:     parse_octal12                                      >>
+        mtime:    parse_octal12                                      >>
+        chksum:   parse_str8                                         >>
+        typeflag: parse_type_flag                                    >>
+        linkname: parse_str100                                       >>
+        ustar:    alt!(apply!(parse_ustar, &typeflag) | parse_posix) >>
+        longname: opt!(apply!(parse_maybe_longname, &typeflag))      >>
+        (PosixHeader {
+            name:     longname.unwrap_or(name),
+            mode:     mode,
+            uid:      uid,
+            gid:      gid,
+            size:     size,
+            mtime:    mtime,
+            chksum:   chksum,
+            typeflag: typeflag,
+            linkname: linkname,
+            ustar:    ustar
+        })
     )
 }
 
