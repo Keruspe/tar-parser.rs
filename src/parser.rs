@@ -270,24 +270,24 @@ fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader> {
     let mut sparses = Vec::new();
 
     do_parse!(i,
-        atime: parse_octal12                                                   >>
-        ctime: parse_octal12                                                   >>
-        offset: parse_octal12                                                  >>
-        longnames: parse_str4                                                  >>
+        atime:      parse_octal12                                              >>
+        ctime:      parse_octal12                                              >>
+        offset:     parse_octal12                                              >>
+        longnames:  parse_str4                                                 >>
         take!(1)                                                               >>
-        sps: apply!(parse_sparses_with_limit, 4)                               >>
+        sps:        apply!(parse_sparses_with_limit, 4)                        >>
         isextended: parse_bool                                                 >>
-        realsize: parse_octal12                                                >>
+        realsize:   parse_octal12                                              >>
         take!(17) /* padding to 512 */                                         >>
         apply!(parse_extra_sparses, isextended, add_to_vec(&mut sparses, sps)) >>
         (PaxHeader {
-            atime:         atime,
-            ctime:         ctime,
-            offset:        offset,
-            longnames:     longnames,
-            sparses:       sparses,
-            isextended:    isextended,
-            realsize:      realsize,
+            atime:      atime,
+            ctime:      ctime,
+            offset:     offset,
+            longnames:  longnames,
+            sparses:    sparses,
+            isextended: isextended,
+            realsize:   realsize,
         })
     )
 }
@@ -307,12 +307,12 @@ fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [
 
 fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], ExtraHeader<'a>> {
     do_parse!(i,
-        tag!("00")                               >>
-        uname: parse_str32                       >>
-        gname: parse_str32                       >>
-        devmajor: parse_octal8                   >>
-        devminor: parse_octal8                   >>
-        extra: apply!(parse_ustar00_extra, flag) >>
+        tag!("00")                                  >>
+        uname:    parse_str32                       >>
+        gname:    parse_str32                       >>
+        devmajor: parse_octal8                      >>
+        devminor: parse_octal8                      >>
+        extra:    apply!(parse_ustar00_extra, flag) >>
         (ExtraHeader::UStar(UStarHeader {
             magic:    "ustar\0",
             version:  "00",
@@ -333,12 +333,12 @@ fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], Ext
  * Posix tar archive header parsing
  */
 
-named!(parse_posix<&[u8], ExtraHeader>, map!(take!(255), |_| ExtraHeader::Padding)); /* padding to 512 */
+named!(parse_posix<&[u8], ExtraHeader>, do_parse!(take!(255) >> (ExtraHeader::Padding))); /* padding to 512 */
 
 fn parse_maybe_longname<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], &'a str> {
-    match flag {
-         &TypeFlag::GNULongName => parse_str512(i),
-         _                      => IResult::Error(error_code!(ErrorKind::Complete))
+    match *flag {
+         TypeFlag::GNULongName => parse_str512(i),
+         _                     => IResult::Error(error_code!(ErrorKind::Complete))
     }
 }
 
@@ -376,7 +376,7 @@ fn parse_header<'a>(i: &'a [u8]) -> IResult<&'a [u8], PosixHeader<'a>> {
 
 fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &[u8]> {
     let trailing = size % 512;
-    let padding = match trailing {
+    let padding  = match trailing {
         0 => 0,
         t => 512 - t
     };
@@ -391,8 +391,8 @@ named!(parse_entry<&[u8], TarEntry>, do_parse!(
     header:   parse_header                        >>
     contents: apply!(parse_contents, header.size) >>
     (TarEntry {
-            header: header,
-            contents: contents
+        header: header,
+        contents: contents
     })
 ));
 
@@ -422,14 +422,14 @@ mod tests {
     #[test]
     fn octal_to_u64_ok_test() {
         assert_eq!(octal_to_u64("756"), Ok(494));
-        assert_eq!(octal_to_u64(""), Ok(0));
+        assert_eq!(octal_to_u64(""),    Ok(0));
     }
 
     #[test]
     fn octal_to_u64_error_test() {
         assert_eq!(octal_to_u64("1238"), Err("invalid octal string received"));
-        assert_eq!(octal_to_u64("a"), Err("invalid octal string received"));
-        assert_eq!(octal_to_u64("A"), Err("invalid octal string received"));
+        assert_eq!(octal_to_u64("a"),    Err("invalid octal string received"));
+        assert_eq!(octal_to_u64("A"),    Err("invalid octal string received"));
     }
 
     #[test]
