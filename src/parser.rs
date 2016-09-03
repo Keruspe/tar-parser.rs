@@ -102,14 +102,15 @@ pub struct Padding;
  */
 
 macro_rules! take_str_eat_garbage (
-    ( $i:expr, $size:expr ) => (
+    ( $i:expr, $size:expr ) => ({
+        let _size = $size as usize;
         do_parse!($i,
-            s:      map_res!(take_until!("\0"), from_utf8)             >>
-            length: expr_opt!({($size as usize).checked_sub(s.len())}) >>
-            take!(length)                                              >>
+            s:      map_res!(take_until!("\0"), from_utf8)  >>
+            length: expr_opt!({_size.checked_sub(s.len())}) >>
+            take!(length)                                   >>
             (s)
         )
-    );
+    });
 );
 
 named!(parse_str4<&[u8], &str>,   take_str_eat_garbage!(4));
