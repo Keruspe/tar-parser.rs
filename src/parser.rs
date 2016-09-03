@@ -120,56 +120,6 @@ named!(parse_str100<&[u8], &str>, take_str_eat_garbage!(100));
 named!(parse_str155<&[u8], &str>, take_str_eat_garbage!(155));
 named!(parse_str512<&[u8], &str>, take_str_eat_garbage!(512));
 
-/* TODO: drop me / simplify me */
-macro_rules! take_until_expr_with_limit_consume(
-  ($i:expr, $submac:ident!( $($args:tt)* ), $stop: expr, $limit: expr) => (
-    {
-      let mut begin = 0;
-      let mut remaining = $i.len();
-      let mut res = Vec::new();
-      let mut cnt = 0;
-      let mut err = false;
-      let mut append = true;
-      loop {
-        match $submac!(&$i[begin..], $($args)*) {
-          IResult::Done(i,o) => {
-            if append {
-              if $stop(&o) {
-                append = false;
-              } else {
-                res.push(o);
-              }
-            }
-            begin += remaining - i.len();
-            remaining = i.len();
-            cnt = cnt + 1;
-            if cnt == $limit {
-              break
-            }
-          },
-          IResult::Error(_)  => {
-            err = true;
-            break;
-          },
-          IResult::Incomplete(_) => {
-            break;
-          }
-        }
-      }
-      if err {
-        IResult::Error(Err::Position(ErrorKind::TakeUntil,$i))
-      } else if cnt == $limit {
-        IResult::Done(&$i[begin..], res)
-      } else {
-        IResult::Incomplete(Needed::Unknown)
-      }
-    }
-  );
-  ($i:expr, $f:expr, $stop: expr, $limit: expr) => (
-    take_until_expr_with_limit_consume!($i, call!($f), $stop, $limit);
-  );
-);
-
 /*
  * Octal string parsing
  */
@@ -230,7 +180,28 @@ named!(parse_type_flag<&[u8], TypeFlag>, map!(take!(1), bytes_to_type_flag));
 named!(parse_one_sparse<&[u8], Sparse>, do_parse!(offset: parse_octal12 >> numbytes: parse_octal12 >> (Sparse { offset: offset, numbytes: numbytes })));
 
 fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse>> {
-    take_until_expr_with_limit_consume!(i, parse_one_sparse, |s: &Sparse| s.offset == 0 && s.numbytes == 0, limit)
+    let mut res = IResult::Done(i, Vec::new());
+
+    for _ in 0..limit {
+        if let IResult::Done(i, mut sparses) = res {
+            let mut out = false;
+            res = map!(i, call!(parse_one_sparse), |sp: Sparse| {
+                if sp.offset == 0 && sp.numbytes == 0 {
+                    out = true
+                } else {
+                    sparses.push(sp);
+                }
+                sparses
+            });
+            if out {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    res
 }
 
 fn add_to_vec<'a, 'b>(sparses: &'a mut Vec<Sparse>, extra: Vec<Sparse>) -> &'a mut Vec<Sparse> {
