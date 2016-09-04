@@ -144,7 +144,20 @@ named!(take_oct_digit<&[u8], u8>, take1_if!(is_oct_digit));
 named!(take_oct_digit_value<&[u8], u64>, map!(take_oct_digit, |c| (c as u64) - ('0' as u64)));
 
 pub fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
-    map!(i, many_m_n!(n, n, take_oct_digit_value), |vs: Vec<u64>| vs.iter().fold(0, |acc, v| acc * 8 + v))
+    if i.len() < n {
+        IResult::Incomplete(Needed::Size(n))
+    } else {
+        let res = map!(i, many_m_n!(0, n, take_oct_digit_value), |vs: Vec<u64>| vs.iter().fold(0, |acc, v| acc * 8 + v));
+        if let IResult::Done(_i, val) = res {
+            if (i.len() - _i.len()) == n || _i[0] == 0 {
+                IResult::Done(&i[n..], val)
+            } else {
+                IResult::Error(error_position!(ErrorKind::OctDigit, _i))
+            }
+        } else {
+            res
+        }
+    }
 }
 
 named!(parse_octal8<&[u8], u64>,  apply!(parse_octal, 8));
@@ -407,12 +420,13 @@ mod tests {
     #[test]
     fn parse_octal_error_test() {
         let t1: &[u8] = b"1238";
+        let e1: &[u8] = b"8";
         let t2: &[u8] = b"a";
         let t3: &[u8] = b"A";
 
-        assert_eq!(parse_octal(t1, 4), IResult::Error(error_position!(ErrorKind::ManyMN, t1)));
-        assert_eq!(parse_octal(t2, 1), IResult::Error(error_position!(ErrorKind::ManyMN, t2)));
-        assert_eq!(parse_octal(t3, 1), IResult::Error(error_position!(ErrorKind::ManyMN, t3)));
+        assert_eq!(parse_octal(t1, 4), IResult::Error(error_position!(ErrorKind::OctDigit, e1)));
+        assert_eq!(parse_octal(t2, 1), IResult::Error(error_position!(ErrorKind::OctDigit, t2)));
+        assert_eq!(parse_octal(t3, 1), IResult::Error(error_position!(ErrorKind::OctDigit, t3)));
     }
 
     #[test]
