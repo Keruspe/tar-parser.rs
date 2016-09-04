@@ -1,5 +1,4 @@
 use std::str::from_utf8;
-use std::result::Result;
 use nom::*;
 
 /*
@@ -124,22 +123,28 @@ named!(parse_str512<&[u8], &str>, take_str_eat_garbage!(512));
  * Octal string parsing
  */
 
-pub fn octal_to_u64(s: &str) -> Result<u64, &'static str> {
-    let mut u = 0;
-
-    for c in s.chars() {
-        if c < '0' || c > '7' {
-            return Err("invalid octal string received");
-        }
-        u *= 8;
-        u += (c as u64) - ('0' as u64);
-    }
-
-    Ok(u)
+macro_rules! take1_if {
+    ($input:expr, $submac:ident!( $($args:tt)* )) => ({
+        let input: &[u8] = $input;
+        let res: IResult<_, _> = if input.is_empty() {
+            IResult::Incomplete(Needed::Size(1))
+        } else if ! $submac!(input[0], $($args)*) {
+            IResult::Error(error_position!(ErrorKind::OctDigit, input))
+        } else {
+            IResult::Done(&input[1..], input[0])
+        };
+        res
+    });
+    ($input:expr, $f:expr) => (
+        take1_if!($input, call!($f));
+    );
 }
 
-fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
-    map_res!(i, take_str_eat_garbage!(n), octal_to_u64)
+named!(take_oct_digit<&[u8], u8>, take1_if!(is_oct_digit));
+named!(take_oct_digit_value<&[u8], u64>, map!(take_oct_digit, |c| (c as u64) - ('0' as u64)));
+
+pub fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
+    map!(i, many_m_n!(n, n, take_oct_digit_value), |vs: Vec<u64>| vs.iter().fold(0, |acc, v| acc * 8 + v))
 }
 
 named!(parse_octal8<&[u8], u64>,  apply!(parse_octal, 8));
@@ -388,19 +393,25 @@ pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
 mod tests {
     use super::*;
     use std::str::from_utf8;
-    use nom::IResult;
+    use nom::{ErrorKind, IResult};
+
+    const EMPTY: &'static [u8] = b"";
 
     #[test]
-    fn octal_to_u64_ok_test() {
-        assert_eq!(octal_to_u64("756"), Ok(494));
-        assert_eq!(octal_to_u64(""),    Ok(0));
+    fn parse_octal_ok_test() {
+        assert_eq!(parse_octal(b"756", 3), IResult::Done(EMPTY, 494));
+        assert_eq!(parse_octal(b"", 0),    IResult::Done(EMPTY, 0));
     }
 
     #[test]
-    fn octal_to_u64_error_test() {
-        assert_eq!(octal_to_u64("1238"), Err("invalid octal string received"));
-        assert_eq!(octal_to_u64("a"),    Err("invalid octal string received"));
-        assert_eq!(octal_to_u64("A"),    Err("invalid octal string received"));
+    fn parse_octal_error_test() {
+        let t1: &[u8] = b"1238";
+        let t2: &[u8] = b"a";
+        let t3: &[u8] = b"A";
+
+        assert_eq!(parse_octal(t1, 4), IResult::Error(error_position!(ErrorKind::ManyMN, t1)));
+        assert_eq!(parse_octal(t2, 1), IResult::Error(error_position!(ErrorKind::ManyMN, t2)));
+        assert_eq!(parse_octal(t3, 1), IResult::Error(error_position!(ErrorKind::ManyMN, t3)));
     }
 
     #[test]
