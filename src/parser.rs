@@ -102,7 +102,7 @@ pub struct Padding;
 
 macro_rules! take_str_eat_garbage (
     ( $i:expr, $size:expr ) => ({
-        let _size = $size as usize;
+        let _size: usize = $size;
         do_parse!($i,
             s:      map_res!(take_until!("\0"), from_utf8)  >>
             length: expr_opt!({_size.checked_sub(s.len())}) >>
