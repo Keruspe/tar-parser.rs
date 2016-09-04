@@ -399,8 +399,9 @@ mod tests {
 
     #[test]
     fn parse_octal_ok_test() {
-        assert_eq!(parse_octal(b"756", 3), IResult::Done(EMPTY, 494));
-        assert_eq!(parse_octal(b"", 0),    IResult::Done(EMPTY, 0));
+        assert_eq!(parse_octal(b"756", 3),       IResult::Done(EMPTY, 494));
+        assert_eq!(parse_octal(b"756\01234", 8), IResult::Done(EMPTY, 494));
+        assert_eq!(parse_octal(b"", 0),          IResult::Done(EMPTY, 0));
     }
 
     #[test]
