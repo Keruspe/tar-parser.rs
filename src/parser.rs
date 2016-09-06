@@ -100,6 +100,8 @@ pub struct Padding;
  * Useful macros
  */
 
+named!(parse_bool<&[u8], bool>, map!(take!(1), |i: &[u8]| i[0] != 0));
+
 macro_rules! take_str_eat_garbage (
     ( $i:expr, $size:expr ) => ({
         let _size: usize = $size;
@@ -240,16 +242,6 @@ fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut V
         IResult::Done(i, sparses)
     }
 }
-
-/*
- * Boolean parsing
- */
-
-fn to_bool(i: &[u8]) -> bool {
-    i[0] != 0
-}
-
-named!(parse_bool<&[u8], bool>, map!(take!(1), to_bool));
 
 /*
  * UStar PAX extended parsing
