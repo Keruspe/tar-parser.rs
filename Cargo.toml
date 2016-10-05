@@ -12,4 +12,4 @@ license     = "MIT"
 name="tar"
 
 [dependencies]
-nom = { git = "https://github.com/Keruspe/nom" }
+nom = { git = "https://github.com/geal/nom" }
