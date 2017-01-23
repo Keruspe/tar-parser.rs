@@ -7,7 +7,7 @@ repository    = "https://github.com/keruspe/tar.rs"
 documentation = "https://docs.rs/tar-parser/"
 readme        = "README.md"
 keywords      = ["tar","archive","parser","nom"]
-categories    = ["filesystem","parsing"]
+categories    = ["filesystem"]
 license       = "MIT"
 
 [lib]
