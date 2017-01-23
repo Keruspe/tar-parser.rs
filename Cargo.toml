@@ -1,6 +1,6 @@
 [package]
 name          = "tar-parser"
-version       = "0.4.0"
+version       = "0.4.1"
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 description   = "tar archive parser using nom"
 repository    = "https://github.com/keruspe/tar.rs"
