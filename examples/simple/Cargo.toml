@@ -1,10 +1,10 @@
 [package]
 name    = "tar-example"
-version = "0.3.1"
+version = "0.4.2"
 authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 
 [dependencies]
-nom = { git = "https://github.com/Keruspe/nom" }
+nom = "^2.1.0"
 
 [dependencies.tar-parser]
 path = "../.."
