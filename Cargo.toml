@@ -1,13 +1,13 @@
 [package]
 name          = "tar-parser"
-version       = "0.4.2"
+version       = "0.4.3"
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 description   = "tar archive parser using nom"
 repository    = "https://github.com/keruspe/tar.rs"
 documentation = "https://docs.rs/tar-parser/"
 readme        = "README.md"
 keywords      = ["tar","archive","parser","nom"]
-categories    = ["filesystem"]
+categories    = ["filesystem","parser-implementations"]
 license       = "MIT"
 
 [lib]
