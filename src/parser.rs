@@ -149,7 +149,12 @@ pub fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
     if i.len() < n {
         IResult::Incomplete(Needed::Size(n))
     } else {
-        let res = fold_many_m_n!(i, 0, n, take_oct_digit_value, 0, |acc, v| acc * 8 + v);
+        let res = do_parse!(i,
+            number: fold_many_m_n!(0, n, take_oct_digit_value, 0, |acc, v| acc * 8 + v) >>
+            take_while!(is_space) >>
+            (number)
+        );
+
         if let IResult::Done(_i, val) = res {
             if (i.len() - _i.len()) == n || _i[0] == 0 {
                 IResult::Done(&i[n..], val)
