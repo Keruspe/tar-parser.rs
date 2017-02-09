@@ -14,7 +14,7 @@ pub struct TarEntry<'a> {
 #[derive(Debug,PartialEq,Eq)]
 pub struct PosixHeader<'a> {
     pub name:     &'a str,
-    pub mode:     &'a str,
+    pub mode:     u64,
     pub uid:      u64,
     pub gid:      u64,
     pub size:     u64,
@@ -149,7 +149,12 @@ pub fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
     if i.len() < n {
         IResult::Incomplete(Needed::Size(n))
     } else {
-        let res = fold_many_m_n!(i, 0, n, take_oct_digit_value, 0, |acc, v| acc * 8 + v);
+        let res = do_parse!(i,
+            number: fold_many_m_n!(0, n, take_oct_digit_value, 0, |acc, v| acc * 8 + v) >>
+            take_while!(is_space) >>
+            (number)
+        );
+
         if let IResult::Done(_i, val) = res {
             if (i.len() - _i.len()) == n || _i[0] == 0 {
                 IResult::Done(&i[n..], val)
@@ -326,7 +331,7 @@ fn parse_maybe_longname<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a 
 fn parse_header<'a>(i: &'a [u8]) -> IResult<&'a [u8], PosixHeader<'a>> {
     do_parse!(i,
         name:     parse_str100                                       >>
-        mode:     parse_str8                                         >>
+        mode:     parse_octal8                                       >>
         uid:      parse_octal8                                       >>
         gid:      parse_octal8                                       >>
         size:     parse_octal12                                      >>

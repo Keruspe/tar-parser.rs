@@ -20,9 +20,12 @@ fn test_parse_tar(i: &[u8]) {
 
 fn main() {
     let test = include_bytes!("../test.tar");
+    let macos = include_bytes!("../macos.tar");
     let long = include_bytes!("../long.tar");
     println!("parse test");
     test_parse_tar(test);
+    println!("parse macos");
+    test_parse_tar(macos);
     println!("parse long");
     test_parse_tar(long);
 }
