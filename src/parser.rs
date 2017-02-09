@@ -14,7 +14,7 @@ pub struct TarEntry<'a> {
 #[derive(Debug,PartialEq,Eq)]
 pub struct PosixHeader<'a> {
     pub name:     &'a str,
-    pub mode:     &'a str,
+    pub mode:     u64,
     pub uid:      u64,
     pub gid:      u64,
     pub size:     u64,
@@ -331,7 +331,7 @@ fn parse_maybe_longname<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a 
 fn parse_header<'a>(i: &'a [u8]) -> IResult<&'a [u8], PosixHeader<'a>> {
     do_parse!(i,
         name:     parse_str100                                       >>
-        mode:     parse_str8                                         >>
+        mode:     parse_octal8                                       >>
         uid:      parse_octal8                                       >>
         gid:      parse_octal8                                       >>
         size:     parse_octal12                                      >>
