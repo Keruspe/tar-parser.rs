@@ -14,7 +14,7 @@ license       = "MIT"
 name="tar"
 
 [dependencies]
-nom = "^2.2.1"
+nom = "^3.0"
 
 [badges]
 travis-ci = { repository = "Keruspe/tar-parser.rs" }
