@@ -229,7 +229,7 @@ fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse
     res
 }
 
-fn add_to_vec<'a, 'b>(sparses: &'a mut Vec<Sparse>, extra: Vec<Sparse>) -> &'a mut Vec<Sparse> {
+fn add_to_vec(sparses: &mut Vec<Sparse>, extra: Vec<Sparse>) -> &mut Vec<Sparse> {
     sparses.extend(extra);
     sparses
 }
@@ -328,7 +328,7 @@ fn parse_maybe_longname<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a 
     }
 }
 
-fn parse_header<'a>(i: &'a [u8]) -> IResult<&'a [u8], PosixHeader<'a>> {
+fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
     do_parse!(i,
         name:     parse_str100                                       >>
         mode:     parse_octal8                                       >>
