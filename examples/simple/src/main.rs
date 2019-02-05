@@ -1,6 +1,6 @@
-extern crate tar;
+#[warn(rust_2018_idioms)]
 
-use tar::*;
+use tar::parse_tar;
 
 fn test_parse_tar(i: &[u8]) {
     match parse_tar(i) {
