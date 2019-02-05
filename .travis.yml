@@ -1,6 +1,34 @@
 language: rust
 
-rust:
-  - nightly
-  - beta
-  - stable
+sudo: required
+
+addons:
+    apt:
+        packages:
+            - libssl-dev
+
+cache: cargo
+
+matrix:
+    include:
+        - rust: 1.31.1
+        - rust: stable
+        - rust: beta
+        - rust: nightly
+        - name: osx
+          rust: nightly
+          os: osx
+        - name: minimal-versions
+          rust: nightly
+          script:
+                - cargo -Z minimal-versions test --verbose --all
+
+script:
+    - cargo build --verbose --all
+    - cargo test  --verbose --all
+
+after_success: |
+    if [[ "$TRAVIS_RUST_VERSION" == stable ]]; then
+        RUSTFLAGS="--cfg procmacro2_semver_exempt" cargo install cargo-tarpaulin
+        cargo tarpaulin --ciserver travis-ci --coveralls $TRAVIS_JOB_ID
+    fi
