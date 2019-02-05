@@ -187,7 +187,7 @@ fn char_to_type_flag(c: char) -> TypeFlag {
         'g'         => TypeFlag::PaxInterexchangeFormat,
         'x'         => TypeFlag::PaxExtendedAttributes,
         'L'         => TypeFlag::GNULongName,
-        'A' ... 'Z' => TypeFlag::VendorSpecific,
+        'A' ..= 'Z' => TypeFlag::VendorSpecific,
         _           => TypeFlag::NormalFile
     }
 }
@@ -252,7 +252,7 @@ fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut V
  * UStar PAX extended parsing
  */
 
-fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader> {
+fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader<'_>> {
     let mut sparses = Vec::new();
 
     do_parse!(i,
@@ -282,7 +282,7 @@ fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader> {
  * UStar Posix parsing
  */
 
-named!(parse_ustar00_extra_posix<&[u8], UStarExtraHeader>, do_parse!(prefix: parse_str155 >> take!(12) >> (UStarExtraHeader::PosixUStar(PosixUStarHeader { prefix: prefix }))));
+named!(parse_ustar00_extra_posix<&[u8], UStarExtraHeader<'_>>, do_parse!(prefix: parse_str155 >> take!(12) >> (UStarExtraHeader::PosixUStar(PosixUStarHeader { prefix: prefix }))));
 
 fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], UStarExtraHeader<'a>> {
     match *flag {
@@ -319,7 +319,7 @@ fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], Ext
  * Posix tar archive header parsing
  */
 
-named!(parse_posix<&[u8], ExtraHeader>, do_parse!(take!(255) >> (ExtraHeader::Padding))); /* padding to 512 */
+named!(parse_posix<&[u8], ExtraHeader<'_>>, do_parse!(take!(255) >> (ExtraHeader::Padding))); /* padding to 512 */
 
 fn parse_maybe_longname<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], &'a str> {
     match *flag {
@@ -328,7 +328,7 @@ fn parse_maybe_longname<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a 
     }
 }
 
-fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader> {
+fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader<'_>> {
     do_parse!(i,
         name:     parse_str100                                       >>
         mode:     parse_octal8                                       >>
@@ -373,7 +373,7 @@ fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &[u8]> {
  * Tar entry header + contents parsing
  */
 
-named!(parse_entry<&[u8], TarEntry>, do_parse!(
+named!(parse_entry<&[u8], TarEntry<'_>>, do_parse!(
     header:   parse_header                        >>
     contents: apply!(parse_contents, header.size) >>
     (TarEntry {
@@ -386,12 +386,12 @@ named!(parse_entry<&[u8], TarEntry>, do_parse!(
  * Tar archive parsing
  */
 
-fn filter_entries(entries: Vec<TarEntry>) -> Vec<TarEntry> {
+fn filter_entries(entries: Vec<TarEntry<'_>>) -> Vec<TarEntry<'_>> {
     /* Filter out empty entries */
-    entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry>>()
+    entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry<'_>>>()
 }
 
-pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry>> {
+pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry<'_>>> {
     do_parse!(i, entries: map!(many0!(parse_entry), filter_entries) >> eof!() >> (entries))
 }
 
@@ -417,11 +417,11 @@ mod tests {
     #[test]
     fn parse_octal_error_test() {
         let t1: &[u8] = b"1238";
-        let e1: &[u8] = b"8";
+        let _e1: &[u8] = b"8";
         let t2: &[u8] = b"a";
         let t3: &[u8] = b"A";
 
-        assert_eq!(parse_octal(t1, 4), IResult::Error(error_position!(ErrorKind::OctDigit, e1)));
+        assert_eq!(parse_octal(t1, 4), IResult::Error(error_position!(ErrorKind::OctDigit, _e1)));
         assert_eq!(parse_octal(t2, 1), IResult::Error(error_position!(ErrorKind::OctDigit, t2)));
         assert_eq!(parse_octal(t3, 1), IResult::Error(error_position!(ErrorKind::OctDigit, t3)));
     }
