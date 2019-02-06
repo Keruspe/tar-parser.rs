@@ -21,7 +21,8 @@ matrix:
         - name: minimal-versions
           rust: nightly
           script:
-                - cargo -Z minimal-versions test --verbose --all
+                - cargo -Z minimal-versions generate-lockfile
+                - cargo test --verbose --all
 
 script:
     - cargo build --verbose --all
