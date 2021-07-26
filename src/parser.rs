@@ -28,7 +28,7 @@ pub struct PosixHeader<'a> {
 }
 
 /* TODO: support more vendor specific */
-#[derive(Debug,PartialEq,Eq)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum TypeFlag {
     NormalFile,
     HardLink,
@@ -292,14 +292,14 @@ fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader<'_>> {
 
 named!(parse_ustar00_extra_posix<&[u8], UStarExtraHeader<'_>>, do_parse!(prefix: parse_str155 >> take!(12) >> (UStarExtraHeader::PosixUStar(PosixUStarHeader { prefix: prefix }))));
 
-fn parse_ustar00_extra<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], UStarExtraHeader<'a>> {
-    match *flag {
+fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader<'_>> {
+    match flag {
         TypeFlag::PaxInterexchangeFormat => do_parse!(i, header: parse_ustar00_extra_pax >> (UStarExtraHeader::Pax(header))),
         _                                => parse_ustar00_extra_posix(i)
     }
 }
 
-fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], ExtraHeader<'a>> {
+fn parse_ustar00(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader<'_>> {
     do_parse!(i,
         tag!("00")                                  >>
         uname:    parse_str32                       >>
@@ -319,7 +319,7 @@ fn parse_ustar00<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], E
     )
 }
 
-fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], ExtraHeader<'a>> {
+fn parse_ustar(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader<'_>> {
     do_parse!(i, tag!("ustar\0") >> ustar: call!(parse_ustar00, flag) >> (ustar))
 }
 
@@ -329,8 +329,8 @@ fn parse_ustar<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], Ext
 
 named!(parse_posix<&[u8], ExtraHeader<'_>>, do_parse!(take!(255) >> (ExtraHeader::Padding))); /* padding to 512 */
 
-fn parse_maybe_longname<'a, 'b>(i: &'a [u8], flag: &'b TypeFlag) -> IResult<&'a [u8], &'a str> {
-    match *flag {
+fn parse_maybe_longname(i: &[u8], flag: TypeFlag) -> IResult<&[u8], &str> {
+    match flag {
          TypeFlag::GNULongName => parse_str512(i),
          _                     => Err(nom::Err::Error(error_position!(i, ErrorKind::Complete)))
     }
@@ -347,8 +347,8 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader<'_>> {
         chksum:   parse_str8                                         >>
         typeflag: parse_type_flag                                    >>
         linkname: parse_str100                                       >>
-        ustar:    alt!(call!(parse_ustar, &typeflag) | parse_posix)  >>
-        longname: opt!(call!(parse_maybe_longname, &typeflag))       >>
+        ustar:    alt!(call!(parse_ustar, typeflag) | parse_posix)   >>
+        longname: opt!(call!(parse_maybe_longname, typeflag))        >>
         (PosixHeader {
             name:     longname.unwrap_or(name),
             mode:     mode,
