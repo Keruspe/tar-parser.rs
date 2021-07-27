@@ -1,6 +1,7 @@
-use std::str::{from_utf8, Utf8Error};
 use nom::*;
+use nom::bytes::complete::{take, take_until};
 use nom::character::{is_oct_digit, is_space};
+use nom::combinator::{map_parser, map_res};
 use nom::error::ErrorKind;
 
 /*
@@ -104,29 +105,19 @@ pub struct Padding;
 
 named!(parse_bool<&[u8], bool>, map!(take!(1), |i: &[u8]| i[0] != 0));
 
-macro_rules! expr_opt {
-    ($i:expr, $e:expr) => {
-        match $e {
-            Some(output) => Ok(($i, output)),
-            None => Err(nom::Err::Error(error_position!($i, ErrorKind::MapOpt))),
-        }
-    }
-}
-
 macro_rules! take_str_eat_garbage (
     ( $i:expr, $size:expr ) => ({
-        let _size: usize = $size;
-        fn from_utf8_complete(s: &[u8])-> Result<&str, Utf8Error> {
-            from_utf8(s)
-        }
-        do_parse!($i,
-            s:      map_res!(take_until!("\0"), from_utf8_complete)  >>
-            length: expr_opt!({_size.checked_sub(s.len())}) >>
-            take!(length)                                   >>
-            (s)
-        )
+        parse_str($size)($i)
     });
 );
+
+/// Read null-terminated string and ignore the rest
+fn parse_str(size: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], &str> {
+    move |input| {
+        let s = map_res(take_until("\0"), std::str::from_utf8);
+        map_parser(take(size), s)(input)
+    }
+}
 
 named!(parse_str4<&[u8], &str>,   take_str_eat_garbage!(4));
 named!(parse_str8<&[u8], &str>,   take_str_eat_garbage!(8));
@@ -410,7 +401,6 @@ pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry<'_>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::from_utf8;
     use nom::error::ErrorKind;
 
     const EMPTY: &[u8] = b"";
@@ -435,9 +425,9 @@ mod tests {
     }
 
     #[test]
-    fn take_str_eat_garbage_test() {
+    fn parse_str_test() {
         let s: &[u8]   = b"foobar\0\0\0\0baz";
         let baz: &[u8] = b"baz";
-        assert_eq!(take_str_eat_garbage!(s, 10), Ok::<_, nom::Err<(_, _)>>((baz, "foobar")));
+        assert_eq!(parse_str(10)(s), Ok((baz, "foobar")));
     }
 }
