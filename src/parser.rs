@@ -178,7 +178,7 @@ named!(parse_type_flag<&[u8], TypeFlag>, map!(take!(1), bytes_to_type_flag));
  * Sparse parsing
  */
 
-named!(parse_one_sparse<&[u8], Sparse>, do_parse!(offset: parse_octal12 >> numbytes: parse_octal12 >> (Sparse { offset: offset, numbytes: numbytes })));
+named!(parse_one_sparse<&[u8], Sparse>, do_parse!(offset: parse_octal12 >> numbytes: parse_octal12 >> (Sparse { offset, numbytes })));
 
 fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse>> {
     let mut res = Ok((i, Vec::new()));
@@ -237,13 +237,13 @@ fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader<'_>> {
         take!(17) /* padding to 512 */                                         >>
         call!(parse_extra_sparses, isextended, add_to_vec(&mut sparses, sps))  >>
         (PaxHeader {
-            atime:      atime,
-            ctime:      ctime,
-            offset:     offset,
-            longnames:  longnames,
-            sparses:    sparses,
-            isextended: isextended,
-            realsize:   realsize,
+            atime,
+            ctime,
+            offset,
+            longnames,
+            sparses,
+            isextended,
+            realsize,
         })
     )
 }
@@ -252,7 +252,7 @@ fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader<'_>> {
  * UStar Posix parsing
  */
 
-named!(parse_ustar00_extra_posix<&[u8], UStarExtraHeader<'_>>, do_parse!(prefix: parse_str155 >> take!(12) >> (UStarExtraHeader::PosixUStar(PosixUStarHeader { prefix: prefix }))));
+named!(parse_ustar00_extra_posix<&[u8], UStarExtraHeader<'_>>, do_parse!(prefix: parse_str155 >> take!(12) >> (UStarExtraHeader::PosixUStar(PosixUStarHeader { prefix }))));
 
 fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader<'_>> {
     match flag {
@@ -270,13 +270,13 @@ fn parse_ustar00(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader<'_>> {
         devminor: parse_octal8                      >>
         extra:    call!(parse_ustar00_extra, flag)  >>
         (ExtraHeader::UStar(UStarHeader {
-            magic:    "ustar\0",
-            version:  "00",
-            uname:    uname,
-            gname:    gname,
-            devmajor: devmajor,
-            devminor: devminor,
-            extra:    extra
+            magic:   "ustar\0",
+            version: "00",
+            uname,
+            gname,
+            devmajor,
+            devminor,
+            extra,
         }))
     )
 }
@@ -312,16 +312,16 @@ fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader<'_>> {
         ustar:    alt!(call!(parse_ustar, typeflag) | parse_posix)   >>
         longname: opt!(call!(parse_maybe_longname, typeflag))        >>
         (PosixHeader {
-            name:     longname.unwrap_or(name),
-            mode:     mode,
-            uid:      uid,
-            gid:      gid,
-            size:     size,
-            mtime:    mtime,
-            chksum:   chksum,
-            typeflag: typeflag,
-            linkname: linkname,
-            ustar:    ustar
+            name: longname.unwrap_or(name),
+            mode,
+            uid,
+            gid,
+            size,
+            mtime,
+            chksum,
+            typeflag,
+            linkname,
+            ustar,
         })
     )
 }
@@ -347,8 +347,8 @@ named!(parse_entry<&[u8], TarEntry<'_>>, do_parse!(
     header:   parse_header                        >>
     contents: call!(parse_contents, header.size)  >>
     (TarEntry {
-        header: header,
-        contents: &contents
+        header,
+        contents,
     })
 ));
 
@@ -358,7 +358,7 @@ named!(parse_entry<&[u8], TarEntry<'_>>, do_parse!(
 
 fn filter_entries(entries: Vec<TarEntry<'_>>) -> Vec<TarEntry<'_>> {
     /* Filter out empty entries */
-    entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry<'_>>>()
+    entries.into_iter().filter(|e| !e.header.name.is_empty()).collect()
 }
 
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry<'_>>> {
