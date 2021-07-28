@@ -1,8 +1,9 @@
 use nom::*;
 use nom::bytes::complete::{take, take_until};
-use nom::character::{is_oct_digit, is_space};
+use nom::character::complete::{oct_digit0, space0};
 use nom::combinator::{map_parser, map_res};
 use nom::error::ErrorKind;
+use nom::sequence::terminated;
 
 /*
  * Core structs
@@ -130,45 +131,15 @@ named!(parse_str512<&[u8], &str>, take_str_eat_garbage!(512));
  * Octal string parsing
  */
 
-macro_rules! take1_if {
-    ($input:expr, $submac:ident!( $($args:tt)* )) => ({
-        let input: &[u8] = $input;
-        let res: IResult<_, _> = if input.is_empty() {
-            Err(nom::Err::Incomplete(Needed::new(1)))
-        } else if ! $submac!(input[0], $($args)*) {
-            Err(nom::Err::Error(error_position!(input, ErrorKind::OctDigit)))
-        } else {
-            Ok((input.slice(1..), input[0]))
-        };
-        res
-    });
-    ($input:expr, $f:expr) => (
-        take1_if!($input, call!($f));
-    );
-}
+fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
+    let (rest, input) = take(n)(i)?;
+    let (i, value) = terminated(oct_digit0, space0)(input)?;
 
-named!(take_oct_digit<&[u8], u8>, take1_if!(is_oct_digit));
-named!(take_oct_digit_value<&[u8], u64>, map!(take_oct_digit, |c| (c as u64) - ('0' as u64)));
-
-pub fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
-    if i.len() < n {
-        Err(nom::Err::Incomplete(Needed::new(n)))
+    if i.input_len() == 0 || i[0] == 0 {
+        let value = value.iter().fold(0, |acc, v| acc * 8 + u64::from(*v - b'0'));
+        Ok((rest, value))
     } else {
-        let res = do_parse!(i,
-            number: fold_many_m_n!(0, n, take_oct_digit_value, 0, |acc, v| acc * 8 + v) >>
-            take_while!(is_space) >>
-            (number)
-        );
-
-        if let Ok((_i, val)) = res {
-            if (i.len() - _i.len()) == n || _i[0] == 0 {
-                Ok((i.slice(n..), val))
-            } else {
-                Err(nom::Err::Error(error_position!(_i, ErrorKind::OctDigit)))
-            }
-        } else {
-            res
-        }
+        Err(nom::Err::Error(error_position!(i, ErrorKind::OctDigit)))
     }
 }
 
@@ -409,6 +380,7 @@ mod tests {
     fn parse_octal_ok_test() {
         assert_eq!(parse_octal(b"756", 3),       Ok((EMPTY, 494)));
         assert_eq!(parse_octal(b"756\01234", 8), Ok((EMPTY, 494)));
+        assert_eq!(parse_octal(b"756    \0", 8), Ok((EMPTY, 494)));
         assert_eq!(parse_octal(b"", 0),          Ok((EMPTY, 0)));
     }
 
