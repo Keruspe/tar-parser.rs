@@ -150,29 +150,28 @@ named!(parse_octal12<&[u8], u64>, call!(parse_octal, 12));
  * TypeFlag parsing
  */
 
-fn char_to_type_flag(c: char) -> TypeFlag {
-    match c {
-        '0' | '\0'  => TypeFlag::NormalFile,
-        '1'         => TypeFlag::HardLink,
-        '2'         => TypeFlag::SymbolicLink,
-        '3'         => TypeFlag::CharacterSpecial,
-        '4'         => TypeFlag::BlockSpecial,
-        '5'         => TypeFlag::Directory,
-        '6'         => TypeFlag::FIFO,
-        '7'         => TypeFlag::ContiguousFile,
-        'g'         => TypeFlag::PaxInterexchangeFormat,
-        'x'         => TypeFlag::PaxExtendedAttributes,
-        'L'         => TypeFlag::GNULongName,
-        'A' ..= 'Z' => TypeFlag::VendorSpecific,
-        _           => TypeFlag::NormalFile
-    }
+fn parse_type_flag(i: &[u8]) -> IResult<&[u8], TypeFlag> {
+    let (c, rest) = match i.split_first() {
+        Some((c, rest)) => (c, rest),
+        None => return Err(nom::Err::Incomplete(Needed::new(1))),
+    };
+    let flag = match c {
+        b'0' | b'\0'  => TypeFlag::NormalFile,
+        b'1'          => TypeFlag::HardLink,
+        b'2'          => TypeFlag::SymbolicLink,
+        b'3'          => TypeFlag::CharacterSpecial,
+        b'4'          => TypeFlag::BlockSpecial,
+        b'5'          => TypeFlag::Directory,
+        b'6'          => TypeFlag::FIFO,
+        b'7'          => TypeFlag::ContiguousFile,
+        b'g'          => TypeFlag::PaxInterexchangeFormat,
+        b'x'          => TypeFlag::PaxExtendedAttributes,
+        b'L'          => TypeFlag::GNULongName,
+        b'A' ..= b'Z' => TypeFlag::VendorSpecific,
+        _             => TypeFlag::NormalFile,
+    };
+    Ok((rest, flag))
 }
-
-fn bytes_to_type_flag(i: &[u8]) -> TypeFlag {
-    char_to_type_flag(i[0] as char)
-}
-
-named!(parse_type_flag<&[u8], TypeFlag>, map!(take!(1), bytes_to_type_flag));
 
 /*
  * Sparse parsing
