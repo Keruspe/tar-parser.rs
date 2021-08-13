@@ -4,7 +4,7 @@ use nom::bytes::complete::{tag, take, take_until};
 use nom::character::complete::{oct_digit0, space0};
 use nom::combinator::{all_consuming, map, map_parser, map_res, opt};
 use nom::error::ErrorKind;
-use nom::multi::many0;
+use nom::multi::fold_many0;
 use nom::sequence::{pair, terminated};
 
 /*
@@ -375,13 +375,14 @@ fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry<'_>> {
  * Tar archive parsing
  */
 
-fn filter_entries(entries: Vec<TarEntry<'_>>) -> Vec<TarEntry<'_>> {
-    /* Filter out empty entries */
-    entries.into_iter().filter(|e| !e.header.name.is_empty()).collect()
-}
-
 pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry<'_>>> {
-    all_consuming(map(many0(parse_entry), filter_entries))(i)
+    let entries = fold_many0(parse_entry, Vec::new, |mut vec, e| {
+        if !e.header.name.is_empty() {
+            vec.push(e)
+        }
+        vec
+    });
+    all_consuming(entries)(i)
 }
 
 /*
