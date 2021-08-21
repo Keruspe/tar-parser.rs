@@ -1,6 +1,11 @@
-use std::str::{from_utf8, Utf8Error};
 use nom::*;
-use nom::types::CompleteByteSlice;
+use nom::branch::alt;
+use nom::bytes::complete::{tag, take, take_until};
+use nom::character::complete::{oct_digit0, space0};
+use nom::combinator::{all_consuming, map, map_parser, map_res, opt};
+use nom::error::ErrorKind;
+use nom::multi::fold_many0;
+use nom::sequence::{pair, terminated};
 
 /*
  * Core structs
@@ -27,7 +32,7 @@ pub struct PosixHeader<'a> {
 }
 
 /* TODO: support more vendor specific */
-#[derive(Debug,PartialEq,Eq)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum TypeFlag {
     NormalFile,
     HardLink,
@@ -97,134 +102,106 @@ pub struct Sparse {
 #[derive(Debug,PartialEq,Eq)]
 pub struct Padding;
 
-/*
- * Useful macros
- */
+fn parse_bool(i: &[u8]) -> IResult<&[u8], bool> {
+    map(take(1usize), |i: &[u8]| i[0] != 0)(i)
+}
 
-named!(parse_bool<CompleteByteSlice<'_>, bool>, map!(take!(1), |i: CompleteByteSlice<'_>| i[0] != 0));
+/// Read null-terminated string and ignore the rest
+fn parse_str(size: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], &str> {
+    move |input| {
+        let s = map_res(take_until("\0"), std::str::from_utf8);
+        map_parser(take(size), s)(input)
+    }
+}
 
-macro_rules! take_str_eat_garbage (
-    ( $i:expr, $size:expr ) => ({
-        let _size: usize = $size;
-        fn from_utf8_complete<'a>(s: CompleteByteSlice<'a>)-> Result<&'a str, Utf8Error> {
-            from_utf8(s.0)
+macro_rules! impl_parse_str {
+    ($($name:ident, $size:expr;)+) => ($(
+        fn $name(i: &[u8]) -> IResult<&[u8], &str> {
+            parse_str($size)(i)
         }
-        do_parse!($i,
-            s:      map_res!(take_until!("\0"), from_utf8_complete)  >>
-            length: expr_opt!({_size.checked_sub(s.len())}) >>
-            take!(length)                                   >>
-            (s)
-        )
-    });
-);
+    )+)
+}
 
-named!(parse_str4<CompleteByteSlice<'_>, &str>,   take_str_eat_garbage!(4));
-named!(parse_str8<CompleteByteSlice<'_>, &str>,   take_str_eat_garbage!(8));
-named!(parse_str32<CompleteByteSlice<'_>, &str>,  take_str_eat_garbage!(32));
-named!(parse_str100<CompleteByteSlice<'_>, &str>, take_str_eat_garbage!(100));
-named!(parse_str155<CompleteByteSlice<'_>, &str>, take_str_eat_garbage!(155));
-named!(parse_str512<CompleteByteSlice<'_>, &str>, take_str_eat_garbage!(512));
+impl_parse_str! {
+    parse_str4, 4;
+    parse_str8, 8;
+    parse_str32, 32;
+    parse_str100, 100;
+    parse_str155, 155;
+    parse_str512, 512;
+}
 
 /*
  * Octal string parsing
  */
 
-macro_rules! take1_if {
-    ($input:expr, $submac:ident!( $($args:tt)* )) => ({
-        let input: CompleteByteSlice<'_> = $input;
-        let res: IResult<_, _> = if input.is_empty() {
-            Err(nom::Err::Incomplete(Needed::Size(1)))
-        } else if ! $submac!(input[0], $($args)*) {
-            Err(nom::Err::Error(error_position!(input, ErrorKind::OctDigit)))
-        } else {
-            Ok((input.slice(1..), input[0]))
-        };
-        res
-    });
-    ($input:expr, $f:expr) => (
-        take1_if!($input, call!($f));
-    );
-}
+fn parse_octal(i: &[u8], n: usize) -> IResult<&[u8], u64> {
+    let (rest, input) = take(n)(i)?;
+    let (i, value) = terminated(oct_digit0, space0)(input)?;
 
-named!(take_oct_digit<CompleteByteSlice<'_>, u8>, take1_if!(is_oct_digit));
-named!(take_oct_digit_value<CompleteByteSlice<'_>, u64>, map!(take_oct_digit, |c| (c as u64) - ('0' as u64)));
-
-pub fn parse_octal(i: CompleteByteSlice<'_>, n: usize) -> IResult<CompleteByteSlice<'_>, u64> {
-    if i.len() < n {
-        Err(nom::Err::Incomplete(Needed::Size(n)))
+    if i.input_len() == 0 || i[0] == 0 {
+        let value = value.iter().fold(0, |acc, v| acc * 8 + u64::from(*v - b'0'));
+        Ok((rest, value))
     } else {
-        let res = do_parse!(i,
-            number: fold_many_m_n!(0, n, take_oct_digit_value, 0, |acc, v| acc * 8 + v) >>
-            take_while!(is_space) >>
-            (number)
-        );
-
-        if let Ok((_i, val)) = res {
-            if (i.len() - _i.len()) == n || _i[0] == 0 {
-                Ok((i.slice(n..), val))
-            } else {
-                Err(nom::Err::Error(error_position!(_i, ErrorKind::OctDigit)))
-            }
-        } else {
-            res
-        }
+        Err(nom::Err::Error(error_position!(i, ErrorKind::OctDigit)))
     }
 }
 
-named!(parse_octal8<CompleteByteSlice<'_>, u64>,  apply!(parse_octal, 8));
-named!(parse_octal12<CompleteByteSlice<'_>, u64>, apply!(parse_octal, 12));
+fn parse_octal8(i: &[u8]) -> IResult<&[u8], u64> {
+    parse_octal(i, 8)
+}
+
+fn parse_octal12(i: &[u8]) -> IResult<&[u8], u64> {
+    parse_octal(i, 12)
+}
 
 /*
  * TypeFlag parsing
  */
 
-fn char_to_type_flag(c: char) -> TypeFlag {
-    match c {
-        '0' | '\0'  => TypeFlag::NormalFile,
-        '1'         => TypeFlag::HardLink,
-        '2'         => TypeFlag::SymbolicLink,
-        '3'         => TypeFlag::CharacterSpecial,
-        '4'         => TypeFlag::BlockSpecial,
-        '5'         => TypeFlag::Directory,
-        '6'         => TypeFlag::FIFO,
-        '7'         => TypeFlag::ContiguousFile,
-        'g'         => TypeFlag::PaxInterexchangeFormat,
-        'x'         => TypeFlag::PaxExtendedAttributes,
-        'L'         => TypeFlag::GNULongName,
-        'A' ..= 'Z' => TypeFlag::VendorSpecific,
-        _           => TypeFlag::NormalFile
-    }
+fn parse_type_flag(i: &[u8]) -> IResult<&[u8], TypeFlag> {
+    let (c, rest) = match i.split_first() {
+        Some((c, rest)) => (c, rest),
+        None => return Err(nom::Err::Incomplete(Needed::new(1))),
+    };
+    let flag = match c {
+        b'0' | b'\0'  => TypeFlag::NormalFile,
+        b'1'          => TypeFlag::HardLink,
+        b'2'          => TypeFlag::SymbolicLink,
+        b'3'          => TypeFlag::CharacterSpecial,
+        b'4'          => TypeFlag::BlockSpecial,
+        b'5'          => TypeFlag::Directory,
+        b'6'          => TypeFlag::FIFO,
+        b'7'          => TypeFlag::ContiguousFile,
+        b'g'          => TypeFlag::PaxInterexchangeFormat,
+        b'x'          => TypeFlag::PaxExtendedAttributes,
+        b'L'          => TypeFlag::GNULongName,
+        b'A' ..= b'Z' => TypeFlag::VendorSpecific,
+        _             => TypeFlag::NormalFile,
+    };
+    Ok((rest, flag))
 }
-
-fn bytes_to_type_flag(i: CompleteByteSlice<'_>) -> TypeFlag {
-    char_to_type_flag(i[0] as char)
-}
-
-named!(parse_type_flag<CompleteByteSlice<'_>, TypeFlag>, map!(take!(1), bytes_to_type_flag));
 
 /*
  * Sparse parsing
  */
 
-named!(parse_one_sparse<CompleteByteSlice<'_>, Sparse>, do_parse!(offset: parse_octal12 >> numbytes: parse_octal12 >> (Sparse { offset: offset, numbytes: numbytes })));
+fn parse_one_sparse(i: &[u8]) -> IResult<&[u8], Sparse> {
+    let (i, (offset, numbytes)) = pair(parse_octal12, parse_octal12)(i)?;
+    Ok((i, Sparse { offset, numbytes }))
+}
 
-fn parse_sparses_with_limit(i: CompleteByteSlice<'_>, limit: usize) -> IResult<CompleteByteSlice<'_>, Vec<Sparse>> {
+fn parse_sparses_with_limit(i: &[u8], limit: usize) -> IResult<&[u8], Vec<Sparse>> {
     let mut res = Ok((i, Vec::new()));
 
     for _ in 0..limit {
-        if let Ok((i, mut sparses)) = res {
-            let mut out = false;
-            res = map!(i, call!(parse_one_sparse), |sp: Sparse| {
-                if sp.offset == 0 && sp.numbytes == 0 {
-                    out = true
-                } else {
-                    sparses.push(sp);
-                }
-                sparses
-            });
-            if out {
+        if let Ok((ref mut input, ref mut sparses)) = res {
+            let (i, sp) = parse_one_sparse(input)?;
+            if sp.offset == 0 && sp.numbytes == 0 {
                 break;
             }
+            sparses.push(sp);
+            *input = i;
         } else {
             break;
         }
@@ -238,15 +215,13 @@ fn add_to_vec(sparses: &mut Vec<Sparse>, extra: Vec<Sparse>) -> &mut Vec<Sparse>
     sparses
 }
 
-fn parse_extra_sparses<'a, 'b>(i: CompleteByteSlice<'a>, isextended: bool, sparses: &'b mut Vec<Sparse>) -> IResult<CompleteByteSlice<'a>, &'b mut Vec<Sparse>> {
+fn parse_extra_sparses<'a, 'b>(i: &'a [u8], isextended: bool, sparses: &'b mut Vec<Sparse>) -> IResult<&'a [u8], &'b mut Vec<Sparse>> {
     if isextended {
-        do_parse!(i,
-            sps:           apply!(parse_sparses_with_limit, 21)                            >>
-            extended:      parse_bool                                                      >>
-            take!(7) /* padding to 512 */                                                  >>
-            extra_sparses: apply!(parse_extra_sparses, extended, add_to_vec(sparses, sps)) >>
-            (extra_sparses)
-        )
+        let (i, sps) = parse_sparses_with_limit(i, 21)?;
+        let (i, extended) = parse_bool(i)?;
+        let (i, _) = take(7usize)(i)?; // padding to 512
+
+        parse_extra_sparses(i, extended, add_to_vec(sparses, sps))
     } else {
         Ok((i, sparses))
     }
@@ -256,147 +231,158 @@ fn parse_extra_sparses<'a, 'b>(i: CompleteByteSlice<'a>, isextended: bool, spars
  * UStar PAX extended parsing
  */
 
-fn parse_ustar00_extra_pax(i: CompleteByteSlice<'_>) -> IResult<CompleteByteSlice<'_>, PaxHeader<'_>> {
+fn parse_ustar00_extra_pax(i: &[u8]) -> IResult<&[u8], PaxHeader<'_>> {
     let mut sparses = Vec::new();
 
-    do_parse!(i,
-        atime:      parse_octal12                                              >>
-        ctime:      parse_octal12                                              >>
-        offset:     parse_octal12                                              >>
-        longnames:  parse_str4                                                 >>
-        take!(1)                                                               >>
-        sps:        apply!(parse_sparses_with_limit, 4)                        >>
-        isextended: parse_bool                                                 >>
-        realsize:   parse_octal12                                              >>
-        take!(17) /* padding to 512 */                                         >>
-        apply!(parse_extra_sparses, isextended, add_to_vec(&mut sparses, sps)) >>
-        (PaxHeader {
-            atime:      atime,
-            ctime:      ctime,
-            offset:     offset,
-            longnames:  longnames,
-            sparses:    sparses,
-            isextended: isextended,
-            realsize:   realsize,
-        })
-    )
+    let (i, atime) = parse_octal12(i)?;
+    let (i, ctime) = parse_octal12(i)?;
+    let (i, offset) = parse_octal12(i)?;
+    let (i, longnames) = parse_str4(i)?;
+    let (i, _) = take(1usize)(i)?;
+    let (i, sps) = parse_sparses_with_limit(i, 4)?;
+    let (i, isextended) = parse_bool(i)?;
+    let (i, realsize) = parse_octal12(i)?;
+    let (i, _) = take(17usize)(i)?; // padding to 512
+
+    let (i, _) = parse_extra_sparses(i, isextended, add_to_vec(&mut sparses, sps))?;
+
+    let header = PaxHeader {
+        atime,
+        ctime,
+        offset,
+        longnames,
+        sparses,
+        isextended,
+        realsize,
+    };
+    Ok((i, header))
 }
 
 /*
  * UStar Posix parsing
  */
 
-named!(parse_ustar00_extra_posix<CompleteByteSlice<'_>, UStarExtraHeader<'_>>, do_parse!(prefix: parse_str155 >> take!(12) >> (UStarExtraHeader::PosixUStar(PosixUStarHeader { prefix: prefix }))));
+fn parse_ustar00_extra_posix(i: &[u8]) -> IResult<&[u8], UStarExtraHeader<'_>> {
+    let (i, prefix) = terminated(parse_str155, take(12usize))(i)?;
+    let header = UStarExtraHeader::PosixUStar(PosixUStarHeader { prefix });
+    Ok((i, header))
+}
 
-fn parse_ustar00_extra<'a, 'b>(i: CompleteByteSlice<'a>, flag: &'b TypeFlag) -> IResult<CompleteByteSlice<'a>, UStarExtraHeader<'a>> {
-    match *flag {
-        TypeFlag::PaxInterexchangeFormat => do_parse!(i, header: parse_ustar00_extra_pax >> (UStarExtraHeader::Pax(header))),
+fn parse_ustar00_extra(i: &[u8], flag: TypeFlag) -> IResult<&[u8], UStarExtraHeader<'_>> {
+    match flag {
+        TypeFlag::PaxInterexchangeFormat => map(parse_ustar00_extra_pax, UStarExtraHeader::Pax)(i),
         _                                => parse_ustar00_extra_posix(i)
     }
 }
 
-fn parse_ustar00<'a, 'b>(i: CompleteByteSlice<'a>, flag: &'b TypeFlag) -> IResult<CompleteByteSlice<'a>, ExtraHeader<'a>> {
-    do_parse!(i,
-        tag!("00")                                  >>
-        uname:    parse_str32                       >>
-        gname:    parse_str32                       >>
-        devmajor: parse_octal8                      >>
-        devminor: parse_octal8                      >>
-        extra:    apply!(parse_ustar00_extra, flag) >>
-        (ExtraHeader::UStar(UStarHeader {
-            magic:    "ustar\0",
-            version:  "00",
-            uname:    uname,
-            gname:    gname,
-            devmajor: devmajor,
-            devminor: devminor,
-            extra:    extra
-        }))
-    )
+fn parse_ustar00(i: &[u8], flag: TypeFlag) -> IResult<&[u8], ExtraHeader<'_>> {
+    let (i, _) = tag("00")(i)?;
+    let (i, uname) = parse_str32(i)?;
+    let (i, gname) = parse_str32(i)?;
+    let (i, devmajor) = parse_octal8(i)?;
+    let (i, devminor) = parse_octal8(i)?;
+    let (i, extra) = parse_ustar00_extra(i, flag)?;
+
+    let header = ExtraHeader::UStar(UStarHeader {
+        magic: "ustar\0",
+        version: "00",
+        uname,
+        gname,
+        devmajor,
+        devminor,
+        extra,
+    });
+    Ok((i, header))
 }
 
-fn parse_ustar<'a, 'b>(i: CompleteByteSlice<'a>, flag: &'b TypeFlag) -> IResult<CompleteByteSlice<'a>, ExtraHeader<'a>> {
-    do_parse!(i, tag!("ustar\0") >> ustar: apply!(parse_ustar00, flag) >> (ustar))
+fn parse_ustar(flag: TypeFlag) -> impl FnMut(&[u8]) -> IResult<&[u8], ExtraHeader<'_>> {
+    move |input| {
+        let (i, _) = tag("ustar\0")(input)?;
+        parse_ustar00(i, flag)
+    }
 }
 
 /*
  * Posix tar archive header parsing
  */
 
-named!(parse_posix<CompleteByteSlice<'_>, ExtraHeader<'_>>, do_parse!(take!(255) >> (ExtraHeader::Padding))); /* padding to 512 */
+fn parse_posix(i: &[u8]) -> IResult<&[u8], ExtraHeader<'_>> {
+    map(take(255usize), |_| ExtraHeader::Padding)(i) // padding to 512
+}
 
-fn parse_maybe_longname<'a, 'b>(i: CompleteByteSlice<'a>, flag: &'b TypeFlag) -> IResult<CompleteByteSlice<'a>, &'a str> {
-    match *flag {
-         TypeFlag::GNULongName => parse_str512(i),
-         _                     => Err(nom::Err::Error(error_position!(i, ErrorKind::Complete)))
+fn parse_maybe_longname(flag: TypeFlag) -> impl FnMut(&[u8]) -> IResult<&[u8], &str> {
+    move |input| {
+        match flag {
+            TypeFlag::GNULongName => parse_str512(input),
+            _                     => Err(nom::Err::Error(error_position!(input, ErrorKind::Complete)))
+        }
     }
 }
 
-fn parse_header(i: CompleteByteSlice<'_>) -> IResult<CompleteByteSlice<'_>, PosixHeader<'_>> {
-    do_parse!(i,
-        name:     parse_str100                                       >>
-        mode:     parse_octal8                                       >>
-        uid:      parse_octal8                                       >>
-        gid:      parse_octal8                                       >>
-        size:     parse_octal12                                      >>
-        mtime:    parse_octal12                                      >>
-        chksum:   parse_str8                                         >>
-        typeflag: parse_type_flag                                    >>
-        linkname: parse_str100                                       >>
-        ustar:    alt!(apply!(parse_ustar, &typeflag) | parse_posix) >>
-        longname: opt!(apply!(parse_maybe_longname, &typeflag))      >>
-        (PosixHeader {
-            name:     longname.unwrap_or(name),
-            mode:     mode,
-            uid:      uid,
-            gid:      gid,
-            size:     size,
-            mtime:    mtime,
-            chksum:   chksum,
-            typeflag: typeflag,
-            linkname: linkname,
-            ustar:    ustar
-        })
-    )
+fn parse_header(i: &[u8]) -> IResult<&[u8], PosixHeader<'_>> {
+    let (i, name) = parse_str100(i)?;
+    let (i, mode) = parse_octal8(i)?;
+    let (i, uid) = parse_octal8(i)?;
+    let (i, gid) = parse_octal8(i)?;
+    let (i, size) = parse_octal12(i)?;
+    let (i, mtime) = parse_octal12(i)?;
+    let (i, chksum) = parse_str8(i)?;
+    let (i, typeflag) = parse_type_flag(i)?;
+    let (i, linkname) = parse_str100(i)?;
+
+    let (i, ustar) = alt((parse_ustar(typeflag), parse_posix))(i)?;
+    let (i, longname) = opt(parse_maybe_longname(typeflag))(i)?;
+
+    let header = PosixHeader {
+        name: longname.unwrap_or(name),
+        mode,
+        uid,
+        gid,
+        size,
+        mtime,
+        chksum,
+        typeflag,
+        linkname,
+        ustar,
+    };
+    Ok((i, header))
 }
 
 /*
  * Contents parsing
  */
 
-fn parse_contents(i: CompleteByteSlice<'_>, size: u64) -> IResult<CompleteByteSlice<'_>, CompleteByteSlice<'_>> {
+fn parse_contents(i: &[u8], size: u64) -> IResult<&[u8], &[u8]> {
     let trailing = size % 512;
     let padding  = match trailing {
         0 => 0,
         t => 512 - t
     };
-    do_parse!(i, contents: take!(size as usize) >> take!(padding as usize) >> (contents))
+    terminated(take(size), take(padding))(i)
 }
 
 /*
  * Tar entry header + contents parsing
  */
 
-named!(parse_entry<CompleteByteSlice<'_>, TarEntry<'_>>, do_parse!(
-    header:   parse_header                        >>
-    contents: apply!(parse_contents, header.size) >>
-    (TarEntry {
-        header: header,
-        contents: &contents
-    })
-));
+fn parse_entry(i: &[u8]) -> IResult<&[u8], TarEntry<'_>> {
+    let (i, header) = parse_header(i)?;
+    let (i, contents) = parse_contents(i, header.size)?;
+    Ok((i, TarEntry { header, contents }))
+}
 
 /*
  * Tar archive parsing
  */
 
-fn filter_entries(entries: Vec<TarEntry<'_>>) -> Vec<TarEntry<'_>> {
-    /* Filter out empty entries */
-    entries.into_iter().filter(|e| e.header.name != "").collect::<Vec<TarEntry<'_>>>()
-}
-
-pub fn parse_tar(i: &[u8]) -> IResult<CompleteByteSlice<'_>, Vec<TarEntry<'_>>> {
-    do_parse!(CompleteByteSlice(i), entries: map!(many0!(parse_entry), filter_entries) >> eof!() >> (entries))
+pub fn parse_tar(i: &[u8]) -> IResult<&[u8], Vec<TarEntry<'_>>> {
+    let entries = fold_many0(parse_entry, Vec::new, |mut vec, e| {
+        if !e.header.name.is_empty() {
+            vec.push(e)
+        }
+        vec
+    });
+    all_consuming(entries)(i)
 }
 
 /*
@@ -406,24 +392,24 @@ pub fn parse_tar(i: &[u8]) -> IResult<CompleteByteSlice<'_>, Vec<TarEntry<'_>>> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::from_utf8;
-    use nom::ErrorKind;
+    use nom::error::ErrorKind;
 
-    const EMPTY: CompleteByteSlice<'_> = CompleteByteSlice(b"");
+    const EMPTY: &[u8] = b"";
 
     #[test]
     fn parse_octal_ok_test() {
-        assert_eq!(parse_octal(CompleteByteSlice(b"756"), 3),       Ok((EMPTY, 494)));
-        assert_eq!(parse_octal(CompleteByteSlice(b"756\01234"), 8), Ok((EMPTY, 494)));
-        assert_eq!(parse_octal(CompleteByteSlice(b""), 0),          Ok((EMPTY, 0)));
+        assert_eq!(parse_octal(b"756", 3),       Ok((EMPTY, 494)));
+        assert_eq!(parse_octal(b"756\01234", 8), Ok((EMPTY, 494)));
+        assert_eq!(parse_octal(b"756    \0", 8), Ok((EMPTY, 494)));
+        assert_eq!(parse_octal(b"", 0),          Ok((EMPTY, 0)));
     }
 
     #[test]
     fn parse_octal_error_test() {
-        let t1: CompleteByteSlice<'_> = CompleteByteSlice(b"1238");
-        let _e: CompleteByteSlice<'_> = CompleteByteSlice(b"8");
-        let t2: CompleteByteSlice<'_> = CompleteByteSlice(b"a");
-        let t3: CompleteByteSlice<'_> = CompleteByteSlice(b"A");
+        let t1: &[u8] = b"1238";
+        let _e: &[u8] = b"8";
+        let t2: &[u8] = b"a";
+        let t3: &[u8] = b"A";
 
         assert_eq!(parse_octal(t1, 4), Err(nom::Err::Error(error_position!(_e, ErrorKind::OctDigit))));
         assert_eq!(parse_octal(t2, 1), Err(nom::Err::Error(error_position!(t2, ErrorKind::OctDigit))));
@@ -431,9 +417,9 @@ mod tests {
     }
 
     #[test]
-    fn take_str_eat_garbage_test() {
-        let s   = CompleteByteSlice(b"foobar\0\0\0\0baz");
-        let baz = CompleteByteSlice(b"baz");
-        assert_eq!(take_str_eat_garbage!(s.slice(..), 10), Ok((baz.slice(..), "foobar")));
+    fn parse_str_test() {
+        let s: &[u8]   = b"foobar\0\0\0\0baz";
+        let baz: &[u8] = b"baz";
+        assert_eq!(parse_str(10)(s), Ok((baz, "foobar")));
     }
 }
